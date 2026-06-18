@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DXF to XXL</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>DXF to XXL</h1>
+      <div id="status" class="status">Pripravljen</div>
+    </header>
+
+    <main>
+      <aside>
+        <form id="convert-form">
+          <label class="dropzone" id="dropzone">
+            <input id="file" name="file" type="file" accept=".dxf">
+            <span>
+              <span class="file-name" id="file-name">Izberi DXF datoteko</span>
+              <span class="file-meta" id="file-meta">.dxf</span>
+            </span>
+          </label>
+
+          <div class="fields">
+            <label>
+              Ime programa
+              <input id="name" name="name" type="text" placeholder="PART2">
+            </label>
+
+            <label>
+              Debelina materiala
+              <input name="thickness" type="number" min="0" step="0.1" placeholder="18">
+            </label>
+
+            <div class="row">
+              <label>
+                Koncni Z
+                <input name="cutDepth" type="number" min="0" step="0.1" placeholder="20">
+              </label>
+              <label>
+                Mozniki Z
+                <input name="drillDepth" type="number" min="0" step="0.1" placeholder="18">
+              </label>
+            </div>
+
+            <label>
+              Max Z na prehod
+              <select name="maxPassDepth">
+                <option value="10">10 mm</option>
+                <option value="0">En prehod</option>
+                <option value="5">5 mm</option>
+                <option value="8">8 mm</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="convert" type="submit" disabled>Pretvori</button>
+            <button id="clear" type="button">Pocisti</button>
+          </div>
+        </form>
+      </aside>
+
+      <section class="output">
+        <div class="toolbar">
+          <div class="filename-output" id="output-name">Ni kode</div>
+          <div class="actions">
+            <button id="copy" type="button" disabled>Kopiraj</button>
+            <button id="download" type="button" disabled>Prenesi .xxl</button>
+          </div>
+        </div>
+
+        <div class="summary" id="summary" hidden>
+          <div class="summary-title">
+            <span>Kaj je zaznano</span>
+            <span id="summary-file"></span>
+          </div>
+          <div class="summary-grid" id="summary-grid"></div>
+          <ul class="summary-list" id="summary-list"></ul>
+        </div>
+
+        <textarea id="code" spellcheck="false" readonly></textarea>
+      </section>
+    </main>
+  </div>
+
+  <script src="converter.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
