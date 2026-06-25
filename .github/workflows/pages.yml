@@ -28,10 +28,17 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Build static site
+        run: |
+          mkdir -p _site
+          cp -R web/. _site/
+          mkdir -p _site/step-g
+          cp -R STEP-G/. _site/step-g/
+
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: _site
 
       - name: Deploy
         id: deployment
