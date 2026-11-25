@@ -275,35 +275,59 @@ const CNC = (() => {
       },
     };
   }
-  /* Xilog Plus (SCM): Y je obrnjen (Y=0 spodnji rob, pozitivno navzdol),
-     rezkanje: XG0 (začetek profila), XL2P (premica), XAR2 (lok z r in G=2/3); vrtanje: B. */
+  /* Xilog Plus (SCM) – po vzoru programov SolidCAM za ta stroj (PART2/PART3.xxl):
+     Y je obrnjen (Y_stroj = -y), Z = globina v material (pozitivno), V v m/min,
+     G=2 = v smeri urinega kazalca, kot ga vidiš na risbi, rezkanje obrisa po robu kosa s C=1 (stroj zamakne za polmer). */
   function xilogWriter(doc) {
     const T = doc.tool, X = doc.xxl, out = [];
     let pos = { x: 0, y: 0, z: doc.cut.safeZ }, open = false, startPt = null, firstFeed = true;
-    const Y = y => fmt(-y);
+    const Y = y => fmt(-y), Z = z => fmt(-z), mpm = v => fmt(Math.round(v / 100) / 10);
+    const G = cw => (cw ? 2 : 3);
     return {
-      out, pos: () => pos,
+      out, pos: () => pos, G, Y, Z, mpm,
+      raw: l => out.push(l),
       begin() {
         out.push(X.header.replace(/\{DX\}/g, fmt(doc.sheet.w)).replace(/\{DY\}/g, fmt(doc.sheet.h)).replace(/\{DZ\}/g, fmt(doc.sheet.t)));
-        out.push(`;${ascii(doc.company || 'CNC')} - ${ascii(doc.name || 'projekt')}`);
-        out.push(`;Rezkar fi ${fmt(T.d)} = T${X.routerT}, Y=0 spodnji rob, Y pozitivno navzdol, Z v material`);
+        out.push(';****************************************************************************');
+        out.push(`;CAM_FileName: ${ascii(doc.name || 'projekt').slice(0, 60)}`);
+        out.push(`;CNC risalnik - ${ascii(doc.company || '')}`);
+        out.push(`;T${X.routerT}=REZKAR ${fmt(T.d)}MM`);
+        for (const b of X.drills || []) out.push(`;T${b.T}=SVEDER ${fmt(b.d)}MM`);
+        out.push(';****************************************************************************');
+        out.push('IX=0', 'IY=0;', 'ROT A=0 X=0 Y=0', 'PL X=0 Y=0 Z=0 Q=0 R=0', ';', 'C=0', 'F=1');
       },
+      section(title) { out.push(';Tilt Plane - POS 1', 'PL X=0 Y=0 Z=0 Q=0 R=0', ';******************************', `; ${ascii(title)}`, ';******************************', '; ', 'O X=0 Y=0 Z=0 F=1 ;Offset', '; '); },
       comment: t => out.push(`;${ascii(t)}`),
       travel(x, y) { open = false; startPt = { x, y }; pos = { x, y, z: doc.cut.clearZ }; },
       plunge(z) {
-        if (!open) { out.push(`XG0 X=${fmt(startPt.x)} Y=${Y(startPt.y)} Z=${fmt(z)} T=${X.routerT} S=${T.rpm} V=${T.plunge}`); open = true; firstFeed = true; }
-        else out.push(`XL2P Z=${fmt(z)}`);
+        if (!open) { out.push(`XG0 X=${fmt(startPt.x)} Y=${Y(startPt.y)} Z=${Z(z)} V=${mpm(T.plunge)} T=${X.routerT} P=0 D=${X.dOther} C=0 s=0`); open = true; firstFeed = true; }
+        else out.push(`XL2P X=${fmt(pos.x)} Y=${Y(pos.y)} Z=${Z(z)}`);
         pos.z = z;
       },
-      line(x, y) { out.push(`XL2P X=${fmt(x)} Y=${Y(y)}${firstFeed ? ` V=${T.feed}` : ''}`); firstFeed = false; pos.x = x; pos.y = y; },
-      arc(g) { const r = Math.hypot(pos.x - g.cx, pos.y - g.cy);
-        // zrcaljenje Y obrne smer loka
-        out.push(`XAR2 X=${fmt(g.x)} Y=${Y(g.y)} r=${fmt(r)} G=${g.cw ? 3 : 2}${firstFeed ? ` V=${T.feed}` : ''}`); firstFeed = false; pos.x = g.x; pos.y = g.y; },
+      line(x, y) { out.push(`XL2P X=${fmt(x)} Y=${Y(y)} Z=${Z(pos.z)}${firstFeed ? ` V=${mpm(T.feed)}` : ''}`); firstFeed = false; pos.x = x; pos.y = y; },
+      arc(g) { out.push(`XA2P X=${fmt(g.x)} Y=${Y(g.y)} Z=${Z(pos.z)} I=${fmt(g.cx)} J=${Y(g.cy)} G=${G(g.cw)}${firstFeed ? ` V=${mpm(T.feed)}` : ''}`); firstFeed = false; pos.x = g.x; pos.y = g.y; },
       lift() { open = false; pos.z = doc.cut.clearZ; },
       drillBit(d) { return (X.drills || []).find(b => Math.abs(b.d - d) < 0.01) || null; },
       drill(x, y, depth, b) { out.push(`B X=${fmt(x)} Y=${Y(y)} Z=${fmt(depth)} V=${b.V} S=${b.S} Q=0 R=1 x=0 y=0 D=2 G=1 T=${b.T}`); },
-      finish() { return out.join('\r\n') + '\r\n'; },
+      finish() { out.push(';**********************************************************', ';END', ';**********************************************************', 'F=1', 'N X=0'); return out.join('\r\n') + '\r\n'; },
     };
+  }
+
+  /* pot začni na sredini najdaljše premice (za mehak vstop) */
+  function startAtLongest(p) {
+    const P = [p.start, ...p.segs];
+    let best = -1, bl = 0;
+    p.segs.forEach((g, i) => { if (g.t === 'L') { const l = dist(P[i], g); if (l > bl) { bl = l; best = i; } } });
+    if (best < 0) return p;
+    const a = P[best], b = p.segs[best], m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const segs = [{ t: 'L', x: b.x, y: b.y }, ...p.segs.slice(best + 1), ...p.segs.slice(0, best), { t: 'L', x: m.x, y: m.y }];
+    return { start: m, closed: true, segs };
+  }
+  function startTangent(p) {
+    const g = p.segs[0], s = p.start;
+    if (g.t === 'L') { const l = dist(s, g); return { x: (g.x - s.x) / l, y: (g.y - s.y) / l }; }
+    const rx = s.x - g.cx, ry = s.y - g.cy, l = Math.hypot(rx, ry);
+    return g.cw ? { x: ry / l, y: -rx / l } : { x: -ry / l, y: rx / l };
   }
 
   function generate(doc, format) {
@@ -336,6 +360,41 @@ const CNC = (() => {
     }
 
     const list = doc.shapes.filter(s => !s.hidden).slice().sort((a, b) => OPS[a.op].order - OPS[b.op].order);
+    let drillSec = false;
+    /* Xilog: obris po robu kosa, C=1, vstop/izstop po četrtinskem loku (kot SolidCAM) */
+    function compProfile(s, op, depth, levels, nm) {
+      const X = doc.xxl;
+      let p = shapePath(s); if (op === 'inside') p = reversePath(p);
+      p = startAtLongest(p);
+      let R = 0;
+      for (let k = 0; k <= 8; k++) {
+        const cand = X.leadR * (1 - k / 10);
+        if (cand < r + 1) break;
+        if (op === 'outside' || offsetShape(s, -(r + cand + 1)).ok) { R = cand; break; }
+      }
+      if (!R) { warnings.push(`${nm}: odprtina je premajhna za vstopni lok – rezkano s sredino rezkarja (C=0, preveri na stroju).`); return false; }
+      if (op === 'outside' && s.through && C.tabs > 0) warnings.push(`${nm}: mostički pri izvozu XXL niso podprti (kos drži vakuum).`);
+      const u = startTangent(p), nR = { x: u.y, y: -u.x }, S = p.start;
+      const c = { x: S.x + nR.x * R, y: S.y + nR.y * R }, A = { x: c.x - u.x * R, y: c.y - u.y * R }, B = { x: c.x + u.x * R, y: c.y + u.y * R };
+      const D = op === 'outside' ? X.dOut : X.dIn;
+      levels.forEach(z => {
+        const zz = W.Z(z);
+        W.raw(`XG0 X=${fmt(A.x)} Y=${W.Y(A.y)} Z=${zz} V=${W.mpm(T.plunge)} T=${X.routerT} P=0 D=${D} C=1 s=0`);
+        W.raw(`XA2P X=${fmt(S.x)} Y=${W.Y(S.y)} Z=${zz} I=${fmt(c.x)} J=${W.Y(c.y)} G=${W.G(true)} V=${W.mpm(T.feed)}`);
+        let cur = S;
+        for (const g of p.segs) {
+          if (g.t === 'L') W.raw(`XL2P X=${fmt(g.x)} Y=${W.Y(g.y)} Z=${zz}`);
+          else W.raw(`XA2P X=${fmt(g.x)} Y=${W.Y(g.y)} Z=${zz} I=${fmt(g.cx)} J=${W.Y(g.cy)} G=${W.G(g.cw)}`);
+          st.cut += g.t === 'L' ? dist(cur, g) : (() => { const a = arcSweep(cur, g); return a.r * a.sw; })(); cur = g;
+        }
+        W.raw(`XA2P X=${fmt(B.x)} Y=${W.Y(B.y)} Z=${zz} I=${fmt(c.x)} J=${W.Y(c.y)} G=${W.G(true)}`);
+        st.cut += Math.PI * R; st.plunge += Math.abs(z); st.rapid += 300;
+      });
+      const off = offsetShape(s, op === 'outside' ? r : -r);
+      preview.push({ kind: 'path', path: off.ok ? off.path : p, op });
+      preview.push({ kind: 'poly', pts: pathToPoints({ start: A, closed: false, segs: [{ t: 'A', x: S.x, y: S.y, cx: c.x, cy: c.y, cw: true }] }, 0.3), op });
+      return true;
+    }
     W.begin();
     list.forEach(s => {
       let op = s.op;
@@ -346,7 +405,7 @@ const CNC = (() => {
 
       if (op === 'drill' && s.type === 'circle') {
         const d = s.r * 2, bit = W.drillBit(d);
-        if (bit) { W.drill(s.cx, s.cy, depth, bit); st.drills++; preview.push({ kind: 'drill', x: s.cx, y: s.cy, r: d / 2 }); return; }
+        if (bit) { if (W.section && !drillSec) { W.section('luknje'); drillSec = true; } W.drill(s.cx, s.cy, depth, bit); st.drills++; preview.push({ kind: 'drill', x: s.cx, y: s.cy, r: d / 2 }); return; }
         if (d > T.d + 0.05) op = 'inside';
         else if (fmtKey === 'xilog') { warnings.push(`${nm}: ni svedra fi ${fmt(d)} in rezkar fi ${fmt(T.d)} je prevelik – luknja ni v programu.`); return; }
         else {
@@ -356,7 +415,8 @@ const CNC = (() => {
           preview.push({ kind: 'drill', x: s.cx, y: s.cy, r }); return;
         }
       }
-      W.comment(`${nm} - ${OPS[op].label}, globina ${fmt(depth)} mm`);
+      if (W.section) W.section(`${nm} - ${OPS[op].label}`); else W.comment(`${nm} - ${OPS[op].label}, globina ${fmt(depth)} mm`);
+      if (fmtKey === 'xilog' && (op === 'outside' || op === 'inside') && compProfile(s, op, depth, levels, nm)) return;
       if (op === 'engrave') {
         const p = shapePath(s);
         levels.forEach((z, i) => { if (i === 0 || !p.closed) { lift(); travel(p.start.x, p.start.y); } plunge(z); runPath(p); });

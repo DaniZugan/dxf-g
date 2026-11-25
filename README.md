@@ -28,19 +28,20 @@ python3 build.py
 
 To ustvari nov `src/cnc-risalnik.html`; prekopiraj ga eno mapo višje.
 
-## Koordinate pri izvozu XXL
+## Izvoz XXL (SCM Xilog)
 
-- X = 0 levi rob, Y = 0 spodnji rob, **Y pozitivno navzdol** (točke nad spodnjim robom imajo negativen Y).
-- Vrtine `B`: Z = globina v material (pozitivno). Rezkanje `XG0/XL2P/XAR2`: Z negativno = globina.
-- Luknja, katere premer se ujema s svedrom iz nastavitev (privzeto ⌀5 = T119, ⌀8 = T110), gre v vrstico `B`.
+Oblika je narejena po programih SolidCAM za ta stroj (`Examples/PART2.xxl`, `-PART3.xxl` v veji `stara-verzija`) in po `part8.xxl`:
+
+- Glava `H DX DY DZ-IL ... BX=0 BY=0 BZ=0 V=10`, nato `IX/IY/ROT/PL/C=0/F=1`, vsaka operacija ima svoj odsek `PL ...` + `O X=0 Y=0 Z=0 F=1 ;Offset`, konec `F=1` / `N X=0`.
+- Koordinate: X = 0 levi rob, **Y_stroj = −y** (točke nad spodnjim robom imajo negativen Y), **Z = globina v material (pozitivno)**.
+- Hitrost `V` je v m/min (pomik 6000 mm/min → `V=6`).
+- Zunanji obris in notranji izrez: pot gre **po robu kosa** s `C=1` (stroj sam zamakne za polmer rezkarja), vstop in izstop po četrtinskem loku `XA2P` z radijem 22 mm, `G=2` = v smeri urinega kazalca na risbi. Zunanji `D=25`, notranji `D=43` (kot SolidCAM).
+- Luknja s premerom, ki ustreza svedru (privzeto ⌀8 = T2, ⌀5 = T119), gre v vrstico `B`.
 
 ## Še ni preverjeno na stroju
 
-Vrtine `B` so v enaki obliki kot referenčni `part8.xxl`. Rezkanje (izrez, utori, žepi) temelji na javnih primerih Xilog in ga je treba preveriti:
-
-1. številka orodja rezkarja (privzeto T101),
-2. enota hitrosti `V` (predpostavljeno mm/min),
-3. smer lokov `G=2/3` (zaradi obrnjenega Y),
-4. ali stroj zahteva `GIN`/`XGIN` pred profilom.
+1. **Žepi, utori in gravure** – v primerih SolidCAM jih ni; izvožene so z `XG0 ... C=0` (brez korekcije, pot po sredini rezkarja).
+2. **Pomen parametra `D`** pri `XG0` – vrednosti 25/43 so prepisane iz primerov.
+3. **Orodja**: SolidCAM primeri uporabljajo T1 (rezkar ⌀20) in T2 (sveder ⌀8), `part8.xxl` pa T110 (⌀8) in T119 (⌀5). Preveri, katera tabela orodij velja.
 
 Najprej odpri program v urejevalniku Xilog in preglej izris, nato prvi rez poženi »po zraku« (dvignjen Z).

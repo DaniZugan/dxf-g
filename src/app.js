@@ -15,21 +15,23 @@ const store = {
 
 /* ---------- dokument ---------- */
 let nextId = 1;
-const XXL_DEFAULT = { header: 'H DX={DX} DY={DY} DZ={DZ}-IL C=0 T=16973825 R=999 *MM /"def" BX=0 BY={DY} BZ=0 V=10', routerT: 101,
-  drills: [{ d: 5, T: 119, S: 3500, V: 2 }, { d: 8, T: 110, S: 2500, V: 1 }] };
+// privzete vrednosti iz programov SolidCAM za ta stroj (PART2/PART3.xxl) in part8.xxl
+const XXL_DEFAULT = { header: 'H DX={DX} DY={DY} DZ={DZ}-IL C=0 T=16973825 R=999 *MM /"def" BX=0 BY=0 BZ=0 V=10', routerT: 1,
+  leadR: 22, dOut: 25, dIn: 43, dOther: 25, stock: 5,
+  drills: [{ d: 8, T: 2, S: 3500, V: 2 }, { d: 5, T: 119, S: 3500, V: 2 }] };
 const mk = (o) => ({ id: nextId++, hidden: false, through: true, depth: 18, ...o });
 function sampleDoc() {
   nextId = 1;
   return {
-    v: 2, name: 'Regal - stranica in polica', company: CONFIG.company, post: 'xilog',
+    v: 3, name: 'Regal - stranica in polica', company: CONFIG.company, post: 'xilog',
     xxl: { ...XXL_DEFAULT, drills: XXL_DEFAULT.drills.map(d => ({ ...d })) },
     sheet: { w: 1000, h: 600, t: 18 },
-    tool: { d: 6, rpm: 18000, feed: 2500, plunge: 600, stepdown: 6 },
-    cut: { safeZ: 15, clearZ: 3, overcut: 0.3, stepover: 0.45, climb: true, tabs: 4, tabW: 8, tabH: 3 },
+    tool: { d: 20, rpm: 18000, feed: 6000, plunge: 2000, stepdown: 10 },
+    cut: { safeZ: 15, clearZ: 3, overcut: 2, stepover: 0.45, climb: true, tabs: 0, tabW: 8, tabH: 3 },
     shapes: [
       mk({ name: 'Stranica', type: 'rect', x: 30, y: 30, w: 400, h: 540, r: 0, op: 'outside' }),
-      mk({ name: 'Utor za polico', type: 'rect', x: 30, y: 282, w: 380, h: 18, r: 0, op: 'pocket', through: false, depth: 8 }),
-      mk({ name: 'Ročaj', type: 'rect', x: 170, y: 470, w: 120, h: 34, r: 17, op: 'inside' }),
+      mk({ name: 'Utor za polico', type: 'rect', x: 30, y: 280, w: 380, h: 30, r: 0, op: 'pocket', through: false, depth: 8 }),
+      mk({ name: 'Ročaj', type: 'rect', x: 150, y: 460, w: 160, h: 50, r: 25, op: 'inside' }),
       ...[110, 174, 398, 462].map((y, i) => mk({ name: `Luknja ${i + 1}`, type: 'circle', cx: 393, cy: y, r: 2.5, op: 'drill', through: false, depth: 10 })),
       mk({ name: 'Polica', type: 'rect', x: 480, y: 30, w: 380, h: 300, r: 0, op: 'outside' }),
       mk({ name: 'Nosilec', type: 'poly', closed: true, op: 'outside',
@@ -42,7 +44,8 @@ function sampleDoc() {
 function upgrade(d) {
   const base = sampleDoc();
   d = { ...base, ...d, tool: { ...base.tool, ...d.tool }, cut: { ...base.cut, ...d.cut }, sheet: { ...base.sheet, ...d.sheet } };
-  if (!d.xxl) { d.xxl = base.xxl; d.post = 'xilog'; }
+  if (!d.xxl || (d.v || 1) < 3) { d.xxl = base.xxl; d.post = 'xilog'; d.tool = base.tool; d.cut = base.cut; d.v = 3; }
+  d.xxl = { ...XXL_DEFAULT, ...d.xxl };
   return d;
 }
 let doc = upgrade(store.get('cnc-doc') || sampleDoc());
@@ -433,7 +436,7 @@ function renderSettings() {
     <label class="f wide"><span>Smer rezkanja</span><select id="s-dir"><option value="1" ${doc.cut.climb ? 'selected' : ''}>Soteklo (climb) – lepši rob</option><option value="0" ${!doc.cut.climb ? 'selected' : ''}>Protismerno (conventional)</option></select></label>
     <label class="f wide"><span>Krmilnik stroja</span><select id="s-post">${Object.entries(CNC.POSTS).map(([k, p]) => `<option value="${k}" ${k === doc.post ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label>
     ${doc.post === 'xilog' ? `<div class="xxl">
-      ${num('x-rt', 'Rezkar – številka orodja T', doc.xxl.routerT, 1, 'T')}
+      <div class="grid2">${num('x-rt', 'Rezkar – številka orodja T', doc.xxl.routerT, 1, 'T')}${num('x-lead', 'Polmer vstopnega loka', doc.xxl.leadR, 1)}${num('x-dout', 'D pri zunanjem obrisu', doc.xxl.dOut, 1, '')}${num('x-din', 'D pri notranjem izrezu', doc.xxl.dIn, 1, '')}${num('x-stock', 'Dodatek surovca na stran', doc.xxl.stock, 1)}</div>
       <p class="sub">Svedri (luknje s tem premerom gredo v vrtine B)</p>
       <div class="drills"><span>⌀ mm</span><span>T</span><span>S obr/min</span><span>V</span><span></span>
       ${doc.xxl.drills.map((b, i) => `<input data-dr="${i}" data-k="d" type="number" step="0.5" value="${fmt(b.d)}" aria-label="Premer svedra ${i + 1}"><input data-dr="${i}" data-k="T" type="number" value="${b.T}" aria-label="Orodje T"><input data-dr="${i}" data-k="S" type="number" step="100" value="${b.S}" aria-label="Vrtljaji"><input data-dr="${i}" data-k="V" type="number" value="${b.V}" aria-label="Hitrost V"><button class="x" data-drdel="${i}" aria-label="Odstrani sveder">×</button>`).join('')}
@@ -450,6 +453,7 @@ function renderSettings() {
   $('#s-post').addEventListener('change', e => { doc.post = e.target.value; commit(); renderSettings(); });
   if (doc.post === 'xilog') {
     $('#x-rt').addEventListener('change', e => { const v = parseInt(e.target.value); if (v >= 0) { doc.xxl.routerT = v; commit(); } });
+    [['x-lead', 'leadR'], ['x-dout', 'dOut'], ['x-din', 'dIn'], ['x-stock', 'stock']].forEach(([id, k]) => $('#' + id).addEventListener('change', e => { const v = parseFloat(e.target.value); if (isFinite(v) && v >= 0) { doc.xxl[k] = v; commit(); } }));
     document.querySelectorAll('[data-dr]').forEach(i => i.addEventListener('change', () => { const v = parseFloat(i.value); if (isFinite(v) && v >= 0) { doc.xxl.drills[+i.dataset.dr][i.dataset.k] = v; commit(); } }));
     document.querySelectorAll('[data-drdel]').forEach(b => b.addEventListener('click', () => { doc.xxl.drills.splice(+b.dataset.drdel, 1); commit(); renderSettings(); }));
     $('#x-add').addEventListener('click', () => { doc.xxl.drills.push({ d: 10, T: 100, S: 3000, V: 1 }); commit(); renderSettings(); });
@@ -523,8 +527,9 @@ function partDocs(withOutline) {
     const b = o ? CNC.shapeBounds(o) : u.b;
     let nm = (o && (o.gname || o.name)) || u.shapes[0].name || 'kos';
     const k = nm.toLowerCase(); names.set(k, (names.get(k) || 0) + 1); if (names.get(k) > 1) nm += ` ${names.get(k)}`;
-    const shapes = u.shapes.filter(x => withOutline || x !== o).map(x => { const c = JSON.parse(JSON.stringify(x)); moveShape(c, -b.x0, -b.y0); return c; });
-    return { name: nm, doc: { ...doc, name: `${doc.name} - ${nm}`, sheet: { ...doc.sheet, w: +(b.x1 - b.x0).toFixed(3), h: +(b.y1 - b.y0).toFixed(3) }, shapes } };
+    const m = withOutline && o ? (doc.xxl ? doc.xxl.stock : 5) : 0;
+    const shapes = u.shapes.filter(x => withOutline || x !== o).map(x => { const c = JSON.parse(JSON.stringify(x)); moveShape(c, m - b.x0, m - b.y0); return c; });
+    return { name: nm, doc: { ...doc, name: nm, sheet: { ...doc.sheet, w: +(b.x1 - b.x0 + 2 * m).toFixed(3), h: +(b.y1 - b.y0 + 2 * m).toFixed(3) }, shapes } };
   });
 }
 const fileSlug = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'kos';
