@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNC risalnik</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: delavniško orodje – natančno, mirno, brez okraskov.
+   IDEA: plošča iverala na mizi CNC stroja; kar nariše, gre naravnost v stroj.
+   PICTURE: risalna miza sama – plošča, kosi v barvah operacij, modre poti rezkarja.
+   COLOUR and TYPE: bela/grafit, brezov les za ploščo, en signalni poudarek (barva podjetja); Archivo.
+   LAYOUT: glava z logotipom, levo orodja, sredina miza, desno mere in izvoz; pod 900px se panel zloži pod mizo. */
+:root{color-scheme:light dark;
+ --bg:light-dark(#ffffff,#141518);--ink:light-dark(#16181b,#eceef1);--mute:light-dark(#5d636b,#9aa1aa);
+ --line:light-dark(#e2e4e8,#2a2d33);--panel:light-dark(#fafafa,#1b1d21);--field:light-dark(#fff,#111316);
+ --bed:light-dark(#e9ebee,#202329);--grid:light-dark(#dde0e4,#272a30);--grid2:light-dark(#c9cdd3,#33373e);
+ --sheet:light-dark(#efe1c6,#5a4c36);--sheet-edge:light-dark(#c9b38b,#8a7553);--path:light-dark(#1769ff,#5b9bff);
+ --accent:#e4002b}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Archivo,system-ui,sans-serif;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template:"top top top" auto "tools stage side" 1fr / 64px minmax(0,1fr) 360px;height:100dvh}
+header{grid-area:top;display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:6px}
+#logo{width:40px;height:40px;border-radius:8px;background:var(--accent);display:grid;place-items:center;overflow:hidden;flex:none}
+#logo span{color:#fff;font-weight:800;font-size:20px;font-stretch:112%}
+#logo img{width:100%;height:100%;object-fit:contain;background:#fff}
+#cname{font-weight:800;font-stretch:112%;font-size:17px;line-height:1.1;white-space:nowrap}
+.brand small{display:block;color:var(--mute);font-size:12.5px;font-weight:500;font-stretch:100%}
+#pname{flex:1 1 220px;max-width:380px;border:1px solid transparent;background:transparent;border-radius:6px;padding:8px 10px;font-weight:600;font-size:16px}
+#pname:hover,#pname:focus{border-color:var(--line);background:var(--field)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.btn,.ghost{min-height:40px;padding:0 14px;border-radius:7px;border:1px solid var(--line);background:var(--bg);font-weight:600;font-size:14px;white-space:nowrap}
+.ghost:hover,.btn:hover{border-color:var(--mute)}
+.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.primary:hover{filter:brightness(1.08);border-color:var(--accent)}
+.danger{color:light-dark(#c4001f,#ff7085)}
+.tools{grid-area:tools;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:6px;padding:10px 8px;align-items:center}
+.tools button{width:46px;height:46px;border-radius:8px;border:1px solid transparent;background:transparent;display:grid;place-items:center;position:relative}
+.tools button:hover{background:var(--panel);border-color:var(--line)}
+.tools button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.tools svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tools kbd{position:absolute;right:3px;bottom:1px;font:600 9.5px Archivo,sans-serif;opacity:.6}
+.tools hr{width:30px;border:0;border-top:1px solid var(--line);margin:4px 0}
+.stage{grid-area:stage;position:relative;overflow:hidden;touch-action:none}
+#cv{position:absolute;inset:0;display:block}
+.status{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;pointer-events:none}
+.status>*{pointer-events:auto;background:color-mix(in srgb,var(--bg) 92%,transparent);border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px;backdrop-filter:blur(6px)}
+#xy{font-variant-numeric:tabular-nums;min-width:150px;font-weight:600}
+#hint{flex:1 1 260px;color:var(--mute)}
+.status label{display:flex;gap:6px;align-items:center;white-space:nowrap}
+.status select{border:0;background:transparent;padding:0}
+.legend{position:absolute;top:12px;left:12px;display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);background:color-mix(in srgb,var(--bg) 90%,transparent);border:1px solid var(--line);border-radius:7px;padding:6px 10px}
+.legend i,.list i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+aside{grid-area:side;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
+section{padding:16px 18px;border-bottom:1px solid var(--line)}
+h2{font-size:15px;font-weight:800;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+h2 small{color:var(--mute);font-weight:600}
+details>summary{cursor:pointer;font-weight:800;font-size:15px;list-style:none;display:flex;justify-content:space-between;min-height:28px;align-items:center}
+details>summary::after{content:"+";font-weight:500;color:var(--mute);font-size:20px}
+details[open]>summary::after{content:"−"}
+details[open]>summary{margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 10px}
+.f{display:grid;grid-template-columns:1fr auto;gap:3px 6px;align-items:center;font-size:13px;color:var(--mute)}
+.f span{grid-column:1/-1}
+.f input,.f select{width:100%;min-height:40px;border:1px solid var(--line);border-radius:6px;background:var(--field);padding:6px 8px;font-size:16px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.f em{font-style:normal;font-size:12px;white-space:nowrap}
+.f.wide{grid-template-columns:1fr;margin-top:10px}
+.chk{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;min-height:32px}
+.chk input{width:18px;height:18px;accent-color:var(--accent)}
+.note{font-size:13px;color:var(--mute);margin:10px 0 0}
+.row{display:flex;gap:8px;margin-top:14px}.row>*{flex:1}
+.name{flex:1;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-weight:700;font-size:16px;background:var(--field)}
+.back{width:36px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--bg);flex:none}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.list button{width:100%;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px;text-align:left;border:0;background:transparent;padding:9px 8px;border-radius:6px;min-height:40px}
+.list button:hover{background:var(--bg)}
+.list span{font-size:12.5px;color:var(--mute)}
+.list .empty{color:var(--mute);font-size:14px;padding:8px}
+.pts{display:grid;gap:5px;grid-column:1/-1}
+.pt{display:grid;grid-template-columns:22px 1fr 1fr 32px;gap:6px;align-items:center;font-size:12.5px;color:var(--mute)}
+.pt input{min-height:36px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:var(--field);font-size:15px;width:100%}
+.pt .x{height:36px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.pts+.chk{grid-column:1/-1}
+.kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.kpi b{display:block;font-size:24px;font-weight:800;font-stretch:112%;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap}
+.kpi span{font-size:12.5px;color:var(--mute)}
+.warn{margin:0 0 12px;padding:10px 12px 10px 28px;border-radius:7px;background:light-dark(#fff4e5,#3a2a12);font-size:13px}
+.warn.good{background:light-dark(#eaf6ee,#13291b);list-style:none;padding-left:12px}
+.dl{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dl .primary{grid-column:1/-1;min-height:46px;font-size:15px}
+pre{margin:10px 0 0;max-height:260px;overflow:auto;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:10px;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+.gh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--mute)}
+.gh .ghost{min-height:34px}
+.color{width:100%;height:40px;border:1px solid var(--line);border-radius:6px;padding:2px;background:var(--field)}
+.file{font-size:13px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;opacity:0;transition:.2s;pointer-events:none;z-index:9;max-width:90vw}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media(prefers-reduced-motion:reduce){#toast{transition:none}}
+.perpart{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}.perpart .ghost{width:100%}
+.sample{font-size:12.5px;color:var(--mute);margin:8px 0 0}
+.grp{display:flex;gap:10px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin:-2px 0 12px;font-size:13px;color:var(--mute)}
+.grp b{color:var(--ink)}.grp .ghost{min-height:34px;flex:none}
+.xxl{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.sub{font-size:13px;font-weight:700;margin:12px 0 6px}
+.drills{display:grid;grid-template-columns:1fr 1fr 1.3fr .8fr 32px;gap:5px;align-items:center;font-size:12px;color:var(--mute)}
+.drills input{min-height:36px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:var(--field);font-size:15px;width:100%}
+.drills .x{height:36px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.small{min-height:34px;margin-top:8px;font-size:13px}
+textarea{width:100%;border:1px solid var(--line);border-radius:6px;background:var(--field);padding:8px;font:13px/1.4 ui-monospace,Menlo,monospace;color:var(--ink);resize:vertical}
+dialog{width:min(1120px,96vw);max-height:92dvh;border:1px solid var(--line);border-radius:12px;padding:0;background:var(--bg);color:var(--ink);overflow:hidden;display:none;flex-direction:column}
+dialog[open]{display:flex}
+dialog::backdrop{background:rgba(10,12,16,.45)}
+.tplhead,.tplfoot{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tplhead h2{margin:0;flex:1;font-size:19px}
+.tplfoot{border-bottom:0;border-top:1px solid var(--line)}.tplfoot .primary{margin-left:auto;min-height:44px}
+.tplbody{display:grid;grid-template-columns:240px minmax(0,1fr) minmax(0,1.1fr);overflow:auto;flex:1}
+#tpl-list{border-right:1px solid var(--line);padding:10px;display:grid;gap:4px;align-content:start}
+#tpl-list button{text-align:left;border:1px solid transparent;background:transparent;border-radius:8px;padding:10px;display:grid;gap:2px}
+#tpl-list button span{font-size:12.5px;color:var(--mute);line-height:1.35}
+#tpl-list button[aria-pressed=true]{background:var(--panel);border-color:var(--line);box-shadow:inset 3px 0 0 var(--accent)}
+#tpl-form{padding:16px 18px;border-right:1px solid var(--line)}
+#tpl-form h3{margin:0 0 4px;font-size:17px}
+.tplprev{padding:16px 18px;background:var(--bed)}
+#tpl-svg{width:100%;height:260px;display:block}
+.parts{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px;font-size:13.5px}
+.parts li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:4px 0}
+.parts span{color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tnotes{margin:10px 0 0;padding-left:18px;font-size:13px;color:var(--mute)}
+@media(max-width:900px){.tplbody{grid-template-columns:minmax(0,1fr)}#tpl-list{border-right:0;border-bottom:1px solid var(--line);grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}#tpl-form{border-right:0}}
+@media(max-width:900px){
+ body{overflow:auto}
+ .app{grid-template:"top" auto "tools" auto "stage" 70vh "side" auto / minmax(0,1fr);height:auto}
+ .tools{flex-direction:row;border-right:0;border-bottom:1px solid var(--line);justify-content:center;flex-wrap:wrap}
+ .tools hr{width:1px;height:30px;border:0;border-left:1px solid var(--line);margin:0 4px}
+ aside{border-left:0;border-top:1px solid var(--line);overflow:visible}
+ #hint{display:none}
+ .acts{margin-left:0}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><div id="logo"></div><div><div id="cname"></div><small>CNC risalnik</small></div></div>
+  <input id="pname" aria-label="Ime projekta">
+  <div class="acts">
+    <button class="ghost" id="tpl-open">Predloge</button>
+    <button class="ghost" id="new">Nov</button>
+    <button class="ghost" id="open">Odpri</button>
+    <button class="ghost" id="undo" aria-label="Razveljavi">↶</button>
+    <button class="ghost" id="redo" aria-label="Ponovi">↷</button>
+    <button class="btn primary" id="dl-nc">Prenesi G-kodo</button>
+  </div>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</header>
+
+<nav class="tools" aria-label="Orodja za risanje">
+  <button data-tool="select" title="Izberi in premakni (V)" aria-label="Izberi"><svg viewBox="0 0 24 24"><path d="M5 3l13 8-6 1.5L9 19z"/></svg><kbd>V</kbd></button>
+  <button data-tool="rect" title="Pravokotnik (R)" aria-label="Pravokotnik"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></svg><kbd>R</kbd></button>
+  <button data-tool="circle" title="Krog / luknja (C)" aria-label="Krog"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M12 12h7.5"/></svg><kbd>C</kbd></button>
+  <button data-tool="poly" title="Črta in oblika (L)" aria-label="Črta in oblika"><svg viewBox="0 0 24 24"><path d="M4 19l5-12 6 7 5-9"/><circle cx="4" cy="19" r="1.3"/><circle cx="9" cy="7" r="1.3"/><circle cx="15" cy="14" r="1.3"/><circle cx="20" cy="5" r="1.3"/></svg><kbd>L</kbd></button>
+  <button id="tpl-open3" title="Kos iz predloge" aria-label="Kos iz predloge"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="12" y="4" width="9" height="7" rx="1"/><rect x="12" y="13" width="9" height="7" rx="1"/></svg><kbd>P</kbd></button>
+  <hr>
+  <button data-tool="pan" title="Premik pogleda (H, ali drži preslednico)" aria-label="Premik pogleda"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><kbd>H</kbd></button>
+  <button id="fit" title="Prilagodi pogled (F)" aria-label="Prilagodi pogled"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><kbd>F</kbd></button>
+</nav>
+
+<main class="stage">
+  <canvas id="cv" aria-label="Risalna miza: plošča materiala z narisanimi kosi"></canvas>
+  <div class="legend"><span><i style="background:#dc2626"></i>Zunanji rez</span><span><i style="background:#1d4ed8"></i>Notranji rez</span><span><i style="background:#15803d"></i>Žep</span><span><i style="background:#a21caf"></i>Gravura</span><span><i style="background:#0891b2"></i>Vrtanje</span><span><i style="background:var(--path)"></i>Pot rezkarja</span></div>
+  <div class="status">
+    <span id="xy">X 0  Y 0</span>
+    <span id="hint"></span>
+    <label><input type="checkbox" id="snap" checked> Pripenjanje</label>
+    <label>Mreža <select id="gridsel"><option value="1">1 mm</option><option value="5" selected>5 mm</option><option value="10">10 mm</option><option value="50">50 mm</option></select></label>
+    <label><input type="checkbox" id="paths" checked> Poti</label>
+  </div>
+</main>
+
+<aside>
+  <section id="selbox"></section>
+  <section>
+    <h2>Program za stroj</h2>
+    <div class="kpi"><div><b id="time">–</b><span>čas (min:s)</span></div><div><b id="len">–</b><span>dolžina reza</span></div><div><b id="nops">–</b><span>operacij</span></div></div>
+    <ul id="warn" class="warn"></ul>
+    <div class="dl">
+      <button class="btn primary" id="dl-nc2">Prenesi G-kodo</button>
+      <button class="ghost" id="dl-dxf">DXF (layerji)</button>
+      <button class="ghost" id="dl-svg">SVG</button>
+      <button class="ghost" id="dl-zip">Vse (ZIP)</button>
+      <button class="ghost" id="dl-json">Shrani projekt</button>
+    </div>
+    <div class="perpart">
+      <button class="ghost" id="dl-parts">Vsak kos svoj program (ZIP)</button>
+      <label class="chk"><input type="checkbox" id="with-outline"> Tudi rezkaj obris kosa</label>
+      <p class="note">Za delo na podstavkih: kos je že razrezan na žagi, program ima mere kosa (DX, DY) in samo vrtine, utore, žepe.</p>
+    </div>
+    <details><summary id="gsum">Predogled G-kode</summary>
+      <div class="gh"><span id="gclines"></span><button class="ghost" id="copy">Kopiraj</button></div>
+      <pre id="gcode"></pre>
+    </details>
+  </section>
+  <section><details open><summary>Material in orodje</summary><div id="setbox"></div></details></section>
+  <section><details><summary>Blagovna znamka</summary>
+    <div class="grid2">
+      <label class="f wide" style="grid-column:1/-1"><span>Ime podjetja</span><input id="b-name"></label>
+      <label class="f"><span>Barva</span><input id="b-acc" type="color" class="color"></label>
+      <label class="f"><span>Logotip (PNG/SVG)</span><input id="b-logo" type="file" accept="image/*" class="file"></label>
+    </div>
+    <div class="row"><button class="ghost" id="b-reset">Ponastavi znamko</button><button class="ghost" id="sample">Naloži vzorec</button></div>
+    <p class="sample">Vzorčni projekt (regal) je izmišljen, za preizkus.</p>
+  </details></section>
+</aside>
+</div>
+<dialog id="tpl" aria-labelledby="tpl-h">
+  <div class="tplhead"><h2 id="tpl-h">Kos iz predloge</h2><button type="button" class="ghost" id="tpl-close">Zapri</button></div>
+  <div class="tplbody">
+    <nav id="tpl-list" aria-label="Predloge"></nav>
+    <div id="tpl-form"></div>
+    <div class="tplprev"><svg id="tpl-svg" role="img" aria-label="Predogled kosov"></svg><ul id="tpl-parts" class="parts"></ul><ul id="tpl-notes" class="tnotes"></ul></div>
+  </div>
+  <div class="tplfoot">
+    <label class="chk"><input type="checkbox" id="tpl-rot"> Dovoli zasuk kosov za 90° (ne upošteva smeri letnic)</label>
+    <label class="chk"><input type="checkbox" id="tpl-clear"> Najprej pobriši ploščo</label>
+    <button type="button" class="btn primary" id="tpl-add">Dodaj na ploščo</button>
+  </div>
+</dialog>
+<div id="toast" role="status"></div>
+<script>
+/* ===== CNC jedro: geometrija, odmik orodja, poti, G-koda, DXF, SVG =====
+   Enote: mm. Koordinatni sistem: X desno, Y gor, izhodišče = spodnji levi kot plošče,
+   Z0 = zgornja ploskev materiala. */
+const CNC = (() => {
+  const TAU = Math.PI * 2;
+  const fmt = n => { const v = Math.abs(n) < 5e-4 ? 0 : n; return (+v.toFixed(3)).toString(); };
+  const ascii = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '').replace(/[()]/g, '');
+  const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+
+  function area(pts) {
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p.x * q.y - q.x * p.y; }
+    return a / 2;
+  }
+  function cleanPts(pts, closed) {
+    const out = [];
+    for (const p of pts) if (!out.length || dist(out[out.length - 1], p) > 1e-6) out.push({ x: p.x, y: p.y });
+    if (closed && out.length > 1 && dist(out[0], out[out.length - 1]) < 1e-6) out.pop();
+    return out;
+  }
+
+  /* Pot: {start:{x,y}, segs:[{t:'L',x,y} | {t:'A',x,y,cx,cy,cw}], closed} */
+  function rectPath(x, y, w, h, r) {
+    r = Math.max(0, Math.min(r || 0, w / 2, h / 2));
+    if (r < 1e-6) return { start: { x, y }, closed: true, segs: [
+      { t: 'L', x: x + w, y }, { t: 'L', x: x + w, y: y + h }, { t: 'L', x, y: y + h }, { t: 'L', x, y }] };
+    const s = [];
+    const L = (px, py) => s.push({ t: 'L', x: px, y: py });
+    const A = (px, py, cx, cy) => s.push({ t: 'A', x: px, y: py, cx, cy, cw: false });
+    L(x + w - r, y); A(x + w, y + r, x + w - r, y + r);
+    L(x + w, y + h - r); A(x + w - r, y + h, x + w - r, y + h - r);
+    L(x + r, y + h); A(x, y + h - r, x + r, y + h - r);
+    L(x, y + r); A(x + r, y, x + r, y + r);
+    return { start: { x: x + r, y }, closed: true, segs: s };
+  }
+  function circlePath(cx, cy, r) {
+    return { start: { x: cx + r, y: cy }, closed: true, segs: [
+      { t: 'A', x: cx - r, y: cy, cx, cy, cw: false }, { t: 'A', x: cx + r, y: cy, cx, cy, cw: false }] };
+  }
+  function polyPath(pts, closed) {
+    pts = cleanPts(pts, closed);
+    if (closed && area(pts) < 0) pts = pts.slice().reverse();
+    const segs = pts.slice(1).map(p => ({ t: 'L', x: p.x, y: p.y }));
+    if (closed) segs.push({ t: 'L', x: pts[0].x, y: pts[0].y });
+    return { start: { ...pts[0] }, closed, segs };
+  }
+  function shapePath(s) {
+    if (s.type === 'rect') return rectPath(s.x, s.y, s.w, s.h, s.r);
+    if (s.type === 'circle') return circlePath(s.cx, s.cy, s.r);
+    return polyPath(s.pts, s.closed);
+  }
+  const isClosed = s => s.type !== 'poly' || !!s.closed;
+
+  /* Odmik zaprtega poligona (CCW). d>0 navzven, d<0 navznoter.
+     Kjer nastane vrzel → lok okoli oglišča, kjer prekrivanje → presečišče. */
+  function polygonOffset(ptsIn, d) {
+    let pts = cleanPts(ptsIn, true);
+    if (pts.length < 3) return { ok: false };
+    if (area(pts) < 0) pts = pts.slice().reverse();
+    const n = pts.length, E = [];
+    for (let i = 0; i < n; i++) {
+      const p = pts[i], q = pts[(i + 1) % n], len = dist(p, q);
+      const u = { x: (q.x - p.x) / len, y: (q.y - p.y) / len }, nr = { x: u.y, y: -u.x };
+      E.push({ u, a: { x: p.x + nr.x * d, y: p.y + nr.y * d }, b: { x: q.x + nr.x * d, y: q.y + nr.y * d } });
+    }
+    const corners = [];
+    for (let i = 0; i < n; i++) {
+      const e0 = E[(i - 1 + n) % n], e1 = E[i];
+      const cr = e0.u.x * e1.u.y - e0.u.y * e1.u.x, dot = e0.u.x * e1.u.x + e0.u.y * e1.u.y;
+      if (Math.abs(cr) < 1e-9 && dot > 0) { corners.push({ first: e1.a, last: e1.a }); continue; }
+      const convex = cr >= 0, gap = (convex && d > 0) || (!convex && d < 0);
+      if (gap) corners.push({ first: e0.b, last: e1.a, arc: { cx: pts[i].x, cy: pts[i].y, cw: d < 0 } });
+      else {
+        const den = e0.u.x * e1.u.y - e0.u.y * e1.u.x;
+        const t = ((e1.a.x - e0.a.x) * e1.u.y - (e1.a.y - e0.a.y) * e1.u.x) / den;
+        const p = { x: e0.a.x + e0.u.x * t, y: e0.a.y + e0.u.y * t };
+        corners.push({ first: p, last: p });
+      }
+    }
+    let ok = true;
+    for (let i = 0; i < n; i++) {
+      const a = corners[i].last, b = corners[(i + 1) % n].first;
+      if ((b.x - a.x) * E[i].u.x + (b.y - a.y) * E[i].u.y < -1e-6) ok = false;
+    }
+    const c0 = corners[0], segs = [];
+    if (c0.arc) segs.push({ t: 'A', x: c0.last.x, y: c0.last.y, ...c0.arc });
+    for (let i = 1; i < n; i++) {
+      const c = corners[i];
+      segs.push({ t: 'L', x: c.first.x, y: c.first.y });
+      if (c.arc) segs.push({ t: 'A', x: c.last.x, y: c.last.y, ...c.arc });
+    }
+    segs.push({ t: 'L', x: c0.first.x, y: c0.first.y });
+    const path = { start: { ...c0.first }, closed: true, segs: segs.filter((g, i) => {
+      const prev = i ? segs[i - 1] : c0.first; return dist(prev, g) > 1e-7; }) };
+    if (ok) { const a2 = area(pathToPoints(path, 0.05)); if (d < 0 && a2 <= 1e-6) ok = false; }
+    return { ok, path };
+  }
+
+  function offsetShape(s, d) {
+    if (s.type === 'rect') {
+      const w = s.w + 2 * d, h = s.h + 2 * d;
+      if (w < 0.01 || h < 0.01) return { ok: false };
+      const rc = Math.max(0, Math.min(s.r || 0, s.w / 2, s.h / 2));
+      const nr = rc > 0 ? Math.max(0, rc + d) : Math.max(0, d);
+      return { ok: true, path: rectPath(s.x - d, s.y - d, w, h, nr) };
+    }
+    if (s.type === 'circle') {
+      const r = s.r + d; if (r < 0.01) return { ok: false };
+      return { ok: true, path: circlePath(s.cx, s.cy, r) };
+    }
+    return polygonOffset(s.pts, d);
+  }
+
+  function arcSweep(from, g) {
+    const a0 = Math.atan2(from.y - g.cy, from.x - g.cx), a1 = Math.atan2(g.y - g.cy, g.x - g.cx);
+    let sw = g.cw ? a0 - a1 : a1 - a0;
+    while (sw <= 1e-9) sw += TAU;
+    while (sw > TAU + 1e-9) sw -= TAU;
+    return { a0, sw, r: Math.hypot(from.x - g.cx, from.y - g.cy) };
+  }
+  function pathToPoints(path, tol = 0.1) {
+    const out = [{ ...path.start }]; let cur = path.start;
+    for (const g of path.segs) {
+      if (g.t === 'L') out.push({ x: g.x, y: g.y });
+      else {
+        const { a0, sw, r } = arcSweep(cur, g);
+        const step = r > tol ? 2 * Math.acos(1 - tol / r) : sw;
+        const n = Math.max(2, Math.ceil(sw / step)), dir = g.cw ? -1 : 1;
+        for (let k = 1; k < n; k++) { const a = a0 + dir * sw * k / n; out.push({ x: g.cx + r * Math.cos(a), y: g.cy + r * Math.sin(a) }); }
+        out.push({ x: g.x, y: g.y });
+      }
+      cur = g;
+    }
+    if (path.closed && out.length > 1 && dist(out[0], out[out.length - 1]) < 1e-6) out.pop();
+    return out;
+  }
+  function pathLength(path) {
+    let L = 0, cur = path.start;
+    for (const g of path.segs) { L += g.t === 'L' ? dist(cur, g) : (() => { const a = arcSweep(cur, g); return a.r * a.sw; })(); cur = g; }
+    return L;
+  }
+  function reversePath(path) {
+    const P = [path.start, ...path.segs];
+    const segs = [];
+    for (let i = path.segs.length - 1; i >= 0; i--) {
+      const g = path.segs[i], to = P[i];
+      segs.push(g.t === 'L' ? { t: 'L', x: to.x, y: to.y } : { t: 'A', x: to.x, y: to.y, cx: g.cx, cy: g.cy, cw: !g.cw });
+    }
+    const last = P[P.length - 1];
+    return { start: { x: last.x, y: last.y }, closed: path.closed, segs };
+  }
+  function pointInPoly(p, poly) {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) c = !c;
+    }
+    return c;
+  }
+  function bounds(pts) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+    return { x0, y0, x1, y1 };
+  }
+  function shapeBounds(s) { return bounds(pathToPoints(shapePath(s), 0.2)); }
+
+  /* Žep: končni obris + cik-cak polnjenje */
+  function pocket(s, tool, stepoverFrac) {
+    const r = tool.d / 2, inner = offsetShape(s, -r);
+    if (!inner.ok) return { ok: false };
+    const poly = pathToPoints(inner.path, 0.05), b = bounds(poly);
+    const step = Math.max(0.05, tool.d * stepoverFrac), strokes = [];
+    let active = [], row = 0;
+    const nearEdge = p => { for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[j], c = poly[i], dx = c.x - a.x, dy = c.y - a.y;
+      let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / ((dx * dx + dy * dy) || 1); t = Math.max(0, Math.min(1, t));
+      if (Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy) < 0.02) return true; } return false; };
+    const okJoin = (a, c) => [0.2, 0.4, 0.6, 0.8].every(t => { const p = { x: a.x + (c.x - a.x) * t, y: a.y + (c.y - a.y) * t }; return pointInPoly(p, poly) || nearEdge(p); });
+    for (let y = b.y0 + step * 0.5; y < b.y1 - 1e-6; y += step, row++) {
+      const xs = [];
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], c = poly[j];
+        if ((a.y > y) !== (c.y > y)) xs.push(a.x + (y - a.y) * (c.x - a.x) / (c.y - a.y));
+      }
+      xs.sort((p, q) => p - q);
+      const iv = [];
+      for (let k = 0; k + 1 < xs.length; k += 2) if (xs[k + 1] - xs[k] > 1e-4) iv.push([xs[k], xs[k + 1]]);
+      const rev = row % 2 === 1, next = [], usedS = new Set(), segOf = [], pairs = [];
+      iv.forEach(([x0, x1], k) => {
+        segOf[k] = rev ? [{ x: x1, y }, { x: x0, y }] : [{ x: x0, y }, { x: x1, y }];
+        active.forEach(st => {
+          if (st.x1 < x0 || st.x0 > x1) return;
+          const e = st.pts[st.pts.length - 1];
+          pairs.push({ st, k, d: Math.hypot(e.x - segOf[k][0].x, e.y - segOf[k][0].y) });
+        });
+      });
+      pairs.sort((p, q) => p.d - q.d);
+      const taken = new Map();
+      for (const p of pairs) {
+        if (usedS.has(p.st) || taken.has(p.k)) continue;
+        if (!okJoin(p.st.pts[p.st.pts.length - 1], segOf[p.k][0])) continue;
+        usedS.add(p.st); taken.set(p.k, p.st);
+      }
+      const order = iv.map((_, k) => k); if (rev) order.reverse();
+      for (const k of order) {
+        const [x0, x1] = iv[k], sg = segOf[k], st0 = taken.get(k);
+        if (st0) { st0.pts.push(...sg); st0.x0 = x0; st0.x1 = x1; next.push(st0); }
+        else { const st = { pts: sg.slice(), x0, x1 }; strokes.push(st); next.push(st); }
+      }
+      active = next;
+    }
+    return { ok: true, strokes: strokes.map(st => st.pts), contour: inner.path };
+  }
+
+  function depthLevels(depth, stepdown) {
+    const n = Math.max(1, Math.ceil(depth / Math.max(0.05, stepdown) - 1e-9));
+    return Array.from({ length: n }, (_, i) => -depth * (i + 1) / n);
+  }
+
+  const OPS = {
+    drill:   { label: 'Vrtanje',      order: 0, layer: 'VRTANJE',      aci: 4, color: '#0891b2' },
+    engrave: { label: 'Gravura (po črti)', order: 1, layer: 'GRAVURA', aci: 6, color: '#a21caf' },
+    pocket:  { label: 'Žep',           order: 2, layer: 'ZEP',          aci: 3, color: '#15803d' },
+    inside:  { label: 'Notranji rez',  order: 3, layer: 'NOTRANJI_REZ', aci: 5, color: '#1d4ed8' },
+    outside: { label: 'Zunanji rez',   order: 4, layer: 'ZUNANJI_REZ',  aci: 1, color: '#dc2626' },
+  };
+  function allowedOps(s) {
+    if (!isClosed(s)) return ['engrave'];
+    if (s.type === 'circle') return ['outside', 'inside', 'pocket', 'engrave', 'drill'];
+    return ['outside', 'inside', 'pocket', 'engrave'];
+  }
+  function shapeDepth(doc, s) { return s.through && s.op !== 'engrave' && s.op !== 'pocket' ? doc.sheet.t + doc.cut.overcut : s.depth; }
+
+  const POSTS = {
+    grbl: { name: 'GRBL / grblHAL', ext: 'nc',
+      head: c => ['G21 G90 G17 G94', `G0 Z${fmt(c.safeZ)}`, `M3 S${c.rpm}`, 'G4 P3'],
+      foot: c => [`G0 Z${fmt(c.safeZ)}`, 'M5', 'G0 X0 Y0', 'M30'] },
+    mach3: { name: 'Mach3 / Mach4', ext: 'tap',
+      head: c => ['G21 G90 G17 G40 G49 G80', 'T1 M6', `G0 Z${fmt(c.safeZ)}`, `S${c.rpm} M3`, 'G4 P3'],
+      foot: c => [`G0 Z${fmt(c.safeZ)}`, 'M5', 'G0 X0 Y0', 'M30'] },
+    linuxcnc: { name: 'LinuxCNC', ext: 'ngc', pct: true,
+      head: c => ['G21 G90 G17 G40 G49 G64 P0.02', 'T1 M6', `G0 Z${fmt(c.safeZ)}`, `S${c.rpm} M3`, 'G4 P3'],
+      foot: c => [`G0 Z${fmt(c.safeZ)}`, 'M5', 'G0 X0 Y0', 'M2'] },
+    xilog: { name: 'SCM Xilog Plus (.xxl)', ext: 'xxl' },
+    iso: { name: 'ISO / Fanuc (s številkami vrstic)', ext: 'nc', pct: true, numbers: true, prog: 'O0001',
+      head: c => ['G21 G90 G17 G40 G49 G80', 'T1 M6', `G0 Z${fmt(c.safeZ)}`, `S${c.rpm} M3`, 'G4 P3'],
+      foot: c => [`G0 Z${fmt(c.safeZ)}`, 'M5', 'G0 X0 Y0', 'M30'] },
+  };
+
+  /* ---- Izhodni "zapisovalniki": G-koda in Xilog (XXL) imata isti vmesnik ---- */
+  function gcodeWriter(doc, post) {
+    const T = doc.tool, C = doc.cut, out = [];
+    let pos = { x: 0, y: 0, z: C.safeZ };
+    return {
+      out, pos: () => pos,
+      begin() {
+        if (post.pct) out.push('%'); if (post.prog) out.push(post.prog);
+        out.push(`(${ascii(doc.company || 'CNC')} - ${ascii(doc.name || 'projekt')})`);
+        out.push(`(Plosca ${fmt(doc.sheet.w)} x ${fmt(doc.sheet.h)} x ${fmt(doc.sheet.t)} mm, X0 Y0 = spodnji levi kot, Z0 = vrh materiala)`);
+        out.push(`(Orodje: rezkar fi ${fmt(T.d)} mm, ${T.rpm} obr/min, F${T.feed}, potop F${T.plunge})`);
+        out.push(...post.head({ ...C, rpm: T.rpm }));
+      },
+      comment: t => out.push(`(${ascii(t)})`),
+      travel(x, y) { if (pos.z < C.safeZ - 1e-6) { out.push(`G0 Z${fmt(C.safeZ)}`); pos.z = C.safeZ; } out.push(`G0 X${fmt(x)} Y${fmt(y)}`); out.push(`G0 Z${fmt(C.clearZ)}`); pos = { x, y, z: C.clearZ }; },
+      plunge(z) { out.push(`G1 Z${fmt(z)} F${T.plunge}`); pos.z = z; },
+      line(x, y) { out.push(`G1 X${fmt(x)} Y${fmt(y)} F${T.feed}`); pos.x = x; pos.y = y; },
+      arc(g) { out.push(`${g.cw ? 'G2' : 'G3'} X${fmt(g.x)} Y${fmt(g.y)} I${fmt(g.cx - pos.x)} J${fmt(g.cy - pos.y)} F${T.feed}`); pos.x = g.x; pos.y = g.y; },
+      lift() { out.push(`G0 Z${fmt(C.clearZ)}`); pos.z = C.clearZ; },
+      drillBit: () => null,
+      finish() {
+        out.push(...post.foot(C));
+        let body = out;
+        if (post.numbers) { let n = 0; body = body.map(l => (l === '%' || l === post.prog || l.startsWith('(')) ? l : `N${(n += 10)} ${l}`); }
+        if (post.pct) body.push('%');
+        return body.join('\n') + '\n';
+      },
+    };
+  }
+  /* Xilog Plus (SCM): Y je obrnjen (Y=0 spodnji rob, pozitivno navzdol),
+     rezkanje: XG0 (začetek profila), XL2P (premica), XAR2 (lok z r in G=2/3); vrtanje: B. */
+  function xilogWriter(doc) {
+    const T = doc.tool, X = doc.xxl, out = [];
+    let pos = { x: 0, y: 0, z: doc.cut.safeZ }, open = false, startPt = null, firstFeed = true;
+    const Y = y => fmt(-y);
+    return {
+      out, pos: () => pos,
+      begin() {
+        out.push(X.header.replace(/\{DX\}/g, fmt(doc.sheet.w)).replace(/\{DY\}/g, fmt(doc.sheet.h)).replace(/\{DZ\}/g, fmt(doc.sheet.t)));
+        out.push(`;${ascii(doc.company || 'CNC')} - ${ascii(doc.name || 'projekt')}`);
+        out.push(`;Rezkar fi ${fmt(T.d)} = T${X.routerT}, Y=0 spodnji rob, Y pozitivno navzdol, Z v material`);
+      },
+      comment: t => out.push(`;${ascii(t)}`),
+      travel(x, y) { open = false; startPt = { x, y }; pos = { x, y, z: doc.cut.clearZ }; },
+      plunge(z) {
+        if (!open) { out.push(`XG0 X=${fmt(startPt.x)} Y=${Y(startPt.y)} Z=${fmt(z)} T=${X.routerT} S=${T.rpm} V=${T.plunge}`); open = true; firstFeed = true; }
+        else out.push(`XL2P Z=${fmt(z)}`);
+        pos.z = z;
+      },
+      line(x, y) { out.push(`XL2P X=${fmt(x)} Y=${Y(y)}${firstFeed ? ` V=${T.feed}` : ''}`); firstFeed = false; pos.x = x; pos.y = y; },
+      arc(g) { const r = Math.hypot(pos.x - g.cx, pos.y - g.cy);
+        // zrcaljenje Y obrne smer loka
+        out.push(`XAR2 X=${fmt(g.x)} Y=${Y(g.y)} r=${fmt(r)} G=${g.cw ? 3 : 2}${firstFeed ? ` V=${T.feed}` : ''}`); firstFeed = false; pos.x = g.x; pos.y = g.y; },
+      lift() { open = false; pos.z = doc.cut.clearZ; },
+      drillBit(d) { return (X.drills || []).find(b => Math.abs(b.d - d) < 0.01) || null; },
+      drill(x, y, depth, b) { out.push(`B X=${fmt(x)} Y=${Y(y)} Z=${fmt(depth)} V=${b.V} S=${b.S} Q=0 R=1 x=0 y=0 D=2 G=1 T=${b.T}`); },
+      finish() { return out.join('\r\n') + '\r\n'; },
+    };
+  }
+
+  function generate(doc, format) {
+    const T = doc.tool, C = doc.cut, r = T.d / 2, fmtKey = format || doc.post;
+    const W = fmtKey === 'xilog' ? xilogWriter(doc) : gcodeWriter(doc, POSTS[fmtKey] || POSTS.grbl);
+    const warnings = [], preview = [], st = { cut: 0, plunge: 0, rapid: 0, drills: 0 };
+    const P = () => W.pos();
+    const travel = (x, y) => { const p = P(); st.rapid += dist(p, { x, y }) + 2 * Math.abs(C.safeZ - C.clearZ); W.travel(x, y); };
+    const plunge = z => { const p = P(); if (Math.abs(p.z - z) < 1e-6) return; st.plunge += Math.abs(p.z - z); W.plunge(z); };
+    const line = (x, y) => { const d = dist(P(), { x, y }); if (d < 1e-6) return; st.cut += d; W.line(x, y); };
+    const arc = g => { const a = arcSweep(P(), g); st.cut += a.r * a.sw; W.arc(g); };
+    const runPath = p => { for (const g of p.segs) g.t === 'L' ? line(g.x, g.y) : arc(g); };
+    const lift = () => { W.lift(); };
+
+    function cutPathWithTabs(p, z, tabZ, tabs) {
+      const pts = pathToPoints(p, 0.02), Ls = [0];
+      for (let i = 1; i < pts.length; i++) Ls.push(Ls[i - 1] + dist(pts[i - 1], pts[i]));
+      if (p.closed) { pts.push(pts[0]); Ls.push(Ls[Ls.length - 1] + dist(pts[pts.length - 2], pts[0])); }
+      const total = Ls[Ls.length - 1], half = (C.tabW + T.d) / 2, iv = [];
+      for (let k = 0; k < tabs; k++) { const c = total * (k + 0.5) / tabs; iv.push([c - half, c + half]); }
+      const inTab = s => iv.some(([a, b]) => s > a && s < b);
+      const cuts = new Set(Ls); iv.flat().forEach(s => { if (s > 0 && s < total) cuts.add(s); });
+      const S = [...cuts].sort((a, b) => a - b);
+      const at = s => { let i = 1; while (i < Ls.length - 1 && Ls[i] < s) i++; const t = (s - Ls[i - 1]) / ((Ls[i] - Ls[i - 1]) || 1);
+        return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t }; };
+      for (let k = 1; k < S.length; k++) {
+        plunge(inTab((S[k - 1] + S[k]) / 2) ? Math.max(z, tabZ) : z);
+        const q = at(S[k]); line(q.x, q.y);
+      }
+    }
+
+    const list = doc.shapes.filter(s => !s.hidden).slice().sort((a, b) => OPS[a.op].order - OPS[b.op].order);
+    W.begin();
+    list.forEach(s => {
+      let op = s.op;
+      const depth = shapeDepth(doc, s), levels = depthLevels(depth, T.stepdown);
+      const nm = s.name || `Element ${doc.shapes.indexOf(s) + 1}`;
+      if (depth <= 0) { warnings.push(`${nm}: globina je 0.`); return; }
+      if (depth > doc.sheet.t + C.overcut + 1e-6) warnings.push(`${nm}: globina ${fmt(depth)} mm je večja od debeline plošče.`);
+
+      if (op === 'drill' && s.type === 'circle') {
+        const d = s.r * 2, bit = W.drillBit(d);
+        if (bit) { W.drill(s.cx, s.cy, depth, bit); st.drills++; preview.push({ kind: 'drill', x: s.cx, y: s.cy, r: d / 2 }); return; }
+        if (d > T.d + 0.05) op = 'inside';
+        else if (fmtKey === 'xilog') { warnings.push(`${nm}: ni svedra fi ${fmt(d)} in rezkar fi ${fmt(T.d)} je prevelik – luknja ni v programu.`); return; }
+        else {
+          if (d < T.d - 1e-6) warnings.push(`${nm}: luknja fi ${fmt(d)} je manjša od rezkarja fi ${fmt(T.d)}; izvrtana bo s fi ${fmt(T.d)}.`);
+          W.comment(`${nm} - Vrtanje, globina ${fmt(depth)} mm`);
+          travel(s.cx, s.cy); levels.forEach(z => { plunge(z); plunge(C.clearZ); }); lift();
+          preview.push({ kind: 'drill', x: s.cx, y: s.cy, r }); return;
+        }
+      }
+      W.comment(`${nm} - ${OPS[op].label}, globina ${fmt(depth)} mm`);
+      if (op === 'engrave') {
+        const p = shapePath(s);
+        levels.forEach((z, i) => { if (i === 0 || !p.closed) { lift(); travel(p.start.x, p.start.y); } plunge(z); runPath(p); });
+        lift(); preview.push({ kind: 'path', path: p, op }); return;
+      }
+      if (op === 'pocket') {
+        const pk = pocket(s, T, C.stepover);
+        if (!pk.ok) { warnings.push(`${nm}: rezkar fi ${fmt(T.d)} je prevelik za ta žep.`); return; }
+        let contour = pk.contour; if (!C.climb) contour = reversePath(contour);
+        levels.forEach(z => {
+          pk.strokes.forEach(sk => { lift(); travel(sk[0].x, sk[0].y); plunge(z); sk.slice(1).forEach(q => line(q.x, q.y)); });
+          lift(); travel(contour.start.x, contour.start.y); plunge(z); runPath(contour);
+        });
+        lift();
+        pk.strokes.forEach(sk => preview.push({ kind: 'poly', pts: sk, op }));
+        preview.push({ kind: 'path', path: contour, op }); return;
+      }
+      const off = offsetShape(s, op === 'outside' ? r : -r);
+      if (!off.ok) { warnings.push(`${nm}: rezkar fi ${fmt(T.d)} je prevelik za to obliko (notranji rez).`); return; }
+      let p = off.path;
+      if (op === 'outside' ? C.climb : !C.climb) p = reversePath(p);
+      const useTabs = op === 'outside' && s.through && C.tabs > 0 && C.tabH > 0;
+      const tabZ = -(doc.sheet.t - C.tabH);
+      if (useTabs && pathLength(p) < C.tabs * (C.tabW + T.d) * 1.5) warnings.push(`${nm}: kos je premajhen za ${C.tabs} mostičke.`);
+      lift(); travel(p.start.x, p.start.y);
+      levels.forEach(z => { if (useTabs && z < tabZ - 1e-6) cutPathWithTabs(p, z, tabZ, C.tabs); else { plunge(z); runPath(p); } });
+      lift(); preview.push({ kind: 'path', path: p, op, tabs: useTabs ? C.tabs : 0 });
+    });
+    const code = W.finish();
+    const minutes = st.cut / T.feed + st.plunge / T.plunge + st.rapid / 5000 + st.drills * 0.05;
+    return { gcode: code, warnings, preview, stats: { ...st, minutes, ops: list.length } };
+  }
+
+  /* ---- DXF (R12, ASCII, mm) — en layer na operacijo + globino ---- */
+  function layerName(doc, s) { return `${OPS[s.op].layer}_D${fmt(shapeDepth(doc, s)).replace('.', '_')}`; }
+  function toDXF(doc) {
+    const ents = [], layers = new Map([['PLOSCA', 8]]);
+    const add = (...kv) => ents.push(...kv);
+    const ang = (c, p) => { let a = Math.atan2(p.y - c.cy, p.x - c.cx) * 180 / Math.PI; return a < 0 ? a + 360 : a; };
+    const sheet = rectPath(0, 0, doc.sheet.w, doc.sheet.h, 0);
+    const emitPath = (p, layer) => {
+      let cur = p.start;
+      for (const g of p.segs) {
+        if (g.t === 'L') add('0', 'LINE', '8', layer, '10', fmt(cur.x), '20', fmt(cur.y), '30', '0', '11', fmt(g.x), '21', fmt(g.y), '31', '0');
+        else {
+          const r = Math.hypot(cur.x - g.cx, cur.y - g.cy);
+          const [sa, ea] = g.cw ? [ang(g, g), ang(g, cur)] : [ang(g, cur), ang(g, g)];
+          add('0', 'ARC', '8', layer, '10', fmt(g.cx), '20', fmt(g.cy), '30', '0', '40', fmt(r), '50', fmt(sa), '51', fmt(ea));
+        }
+        cur = g;
+      }
+    };
+    emitPath(sheet, 'PLOSCA');
+    doc.shapes.filter(s => !s.hidden).forEach(s => {
+      const L = layerName(doc, s); layers.set(L, OPS[s.op].aci);
+      if (s.type === 'circle') add('0', 'CIRCLE', '8', L, '10', fmt(s.cx), '20', fmt(s.cy), '30', '0', '40', fmt(s.r));
+      else emitPath(shapePath(s), L);
+    });
+    const out = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', '4',
+      '9', '$EXTMIN', '10', '0', '20', '0', '9', '$EXTMAX', '10', fmt(doc.sheet.w), '20', fmt(doc.sheet.h), '0', 'ENDSEC',
+      '0', 'SECTION', '2', 'TABLES',
+      '0', 'TABLE', '2', 'LTYPE', '70', '1', '0', 'LTYPE', '2', 'CONTINUOUS', '70', '0', '3', 'Solid line', '72', '65', '73', '0', '40', '0', '0', 'ENDTAB',
+      '0', 'TABLE', '2', 'LAYER', '70', String(layers.size)];
+    for (const [n, c] of layers) out.push('0', 'LAYER', '2', n, '70', '0', '62', String(c), '6', 'CONTINUOUS');
+    out.push('0', 'ENDTAB', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES', ...ents, '0', 'ENDSEC', '0', 'EOF');
+    return out.join('\r\n') + '\r\n';
+  }
+
+  function pathToSVGd(p) {
+    let d = `M${fmt(p.start.x)} ${fmt(p.start.y)}`, cur = p.start;
+    for (const g of p.segs) {
+      if (g.t === 'L') d += ` L${fmt(g.x)} ${fmt(g.y)}`;
+      else { const a = arcSweep(cur, g); d += ` A${fmt(a.r)} ${fmt(a.r)} 0 ${a.sw > Math.PI ? 1 : 0} ${g.cw ? 0 : 1} ${fmt(g.x)} ${fmt(g.y)}`; }
+      cur = g;
+    }
+    return d + (p.closed ? ' Z' : '');
+  }
+  function toSVG(doc) {
+    const W = doc.sheet.w, H = doc.sheet.h;
+    const body = doc.shapes.filter(s => !s.hidden).map(s =>
+      `<path d="${pathToSVGd(shapePath(s))}" fill="none" stroke="${OPS[s.op].color}" stroke-width="0.3" data-op="${s.op}" data-depth="${fmt(shapeDepth(doc, s))}"/>`).join('\n  ');
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}mm" height="${fmt(H)}mm" viewBox="0 0 ${fmt(W)} ${fmt(H)}">\n<g transform="translate(0 ${fmt(H)}) scale(1 -1)">\n  <rect x="0" y="0" width="${fmt(W)}" height="${fmt(H)}" fill="none" stroke="#999" stroke-width="0.2"/>\n  ${body}\n</g>\n</svg>\n`;
+  }
+
+  return { fmt, area, shapePath, offsetShape, polygonOffset, pathToPoints, pathLength, reversePath, pointInPoly,
+    bounds, shapeBounds, pocket, depthLevels, OPS, POSTS, allowedOps, isClosed, shapeDepth, generate, toDXF, toSVG, pathToSVGd, arcSweep };
+})();
+
+
+</script>
+<script>
+/* ===== Predloge: parametrični kosi za delavnico ===== */
+const TPL = (() => {
+  const R = (x, y, w, h, op, depth, extra = {}) => ({ type: 'rect', x, y, w, h, r: 0, op, through: depth == null, depth: depth ?? 18, ...extra });
+  const C = (cx, cy, d, op, depth) => ({ type: 'circle', cx, cy, r: d / 2, op, through: depth == null, depth: depth ?? 18 });
+  const holeOp = () => 'drill'; // generator izbere sveder ali rezkar
+  // utor čez cel kos v smeri X ali Y (podaljšan čez rob, da rezkar pride do roba)
+  // utor, ki ni širši od rezkarja, se rezka kot gravura po sredinski črti (širina = premer rezkarja)
+  let TOOL = 6;
+  const line = (a, b, dep) => ({ type: 'poly', closed: false, pts: [a, b], op: 'engrave', through: false, depth: dep, name: 'Utor' });
+  const grooveX = (len, y, wid, dep, ext) => wid <= TOOL + 0.05 ? line({ x: -ext, y: y + wid / 2 }, { x: len + ext, y: y + wid / 2 }, dep) : R(-ext, y, len + 2 * ext, wid, 'pocket', dep, { name: 'Utor' });
+  const grooveY = (len, x, wid, dep, ext) => wid <= TOOL + 0.05 ? line({ x: x + wid / 2, y: -ext }, { x: x + wid / 2, y: len + ext }, dep) : R(x, -ext, wid, len + 2 * ext, 'pocket', dep, { name: 'Utor' });
+  const narrowNote = (w, tool) => w < tool - 0.05 ? [`Utor ${w} mm je ožji od rezkarja ⌀${tool} – izrezkan bo širok ${tool} mm (po sredini).`] : [];
+
+  function pinRows(w, h, p, tool, fromBack) {
+    // System 32: luknje za nosilce polic, simetrično po višini
+    const out = [], d = p.pinD, xs = [p.pinIn, w - p.pinIn - fromBack];
+    const usable = h - 2 * p.pinStart, n = Math.max(0, Math.floor(usable / 32));
+    const y0 = (h - n * 32) / 2;
+    for (const x of xs) for (let k = 0; k <= n; k++) out.push({ ...C(x, y0 + k * 32, d, holeOp(d, tool), p.pinDepth), name: 'Luknja za nosilec' });
+    return out;
+  }
+
+  const LIST = {
+    korpus: {
+      name: 'Korpus omarice', desc: 'Stranici, dno, strop in police. Po želji utor za hrbet (HDF) in luknje za nosilce polic (sistem 32).',
+      fields: [
+        ['W', 'Zunanja širina', 600], ['H', 'Zunanja višina', 720], ['D', 'Globina', 560], ['shelves', 'Število polic', 2, 'kos'],
+        ['back', 'Utor za hrbet', true, 'bool'], ['backW', 'Širina utora za hrbet', 4], ['backDepth', 'Globina utora', 8], ['backIn', 'Odmik utora od zadnjega roba', 15],
+        ['pins', 'Luknje za nosilce polic', true, 'bool'], ['pinD', 'Premer luknje', 5], ['pinDepth', 'Globina luknje', 10], ['pinIn', 'Odmik vrste lukenj od roba', 37], ['pinStart', 'Prosto od roba (zgoraj/spodaj)', 120],
+      ],
+      make(p, t, tool) {
+        const ext = tool / 2 + 1, parts = [], back = p.back ? p.backIn + p.backW : 0;
+        const side = [];
+        if (p.back) side.push(grooveY(p.H, p.D - p.backIn - p.backW, p.backW, p.backDepth, ext));
+        if (p.pins && p.shelves > 0) side.push(...pinRows(p.D, p.H, p, tool, back));
+        parts.push({ name: 'Stranica leva', w: p.D, h: p.H, feats: side });
+        parts.push({ name: 'Stranica desna', w: p.D, h: p.H, feats: side });
+        const inner = p.W - 2 * t, hz = p.back ? [grooveX(inner, p.D - p.backIn - p.backW, p.backW, p.backDepth, ext)] : [];
+        parts.push({ name: 'Dno', w: inner, h: p.D, feats: hz });
+        parts.push({ name: 'Strop', w: inner, h: p.D, feats: hz });
+        for (let i = 0; i < p.shelves; i++) parts.push({ name: `Polica ${i + 1}`, w: inner - 2, h: p.D - (p.back ? back + 2 : 0) - 20, feats: [] });
+        const notes = p.back ? narrowNote(p.backW, tool) : [];
+        if (p.back) notes.push(`Hrbet (HDF) ni na tej plošči: ${Math.round(inner + 2 * (t - p.backDepth) - 2)} × ${Math.round(p.H - 2 * t + 2 * p.backDepth - 2)} mm.`);
+        return { parts, notes };
+      },
+    },
+    predal: {
+      name: 'Predal', desc: 'Stranici, sprednja in zadnja stranica ter utor za dno (vse štiri stranice).',
+      fields: [['W', 'Zunanja širina', 450], ['H', 'Višina', 140], ['D', 'Globina', 500], ['bottom', 'Utor za dno', true, 'bool'],
+        ['botW', 'Širina utora', 4], ['botDepth', 'Globina utora', 8], ['botUp', 'Odmik utora od spodnjega roba', 12]],
+      make(p, t, tool) {
+        const ext = tool / 2 + 1;
+        const gr = len => p.bottom ? [grooveX(len, p.botUp, p.botW, p.botDepth, ext)] : [];
+        const inner = p.W - 2 * t;
+        return { parts: [
+          { name: 'Stranica predala L', w: p.D, h: p.H, feats: gr(p.D) }, { name: 'Stranica predala D', w: p.D, h: p.H, feats: gr(p.D) },
+          { name: 'Sprednja stranica', w: inner, h: p.H, feats: gr(inner) }, { name: 'Zadnja stranica', w: inner, h: p.H, feats: gr(inner) }],
+          notes: p.bottom ? [...narrowNote(p.botW, tool), `Dno (HDF): ${Math.round(inner + 2 * p.botDepth - 2)} × ${Math.round(p.D - 2 * t + 2 * p.botDepth - 2)} mm.`] : [] };
+      },
+    },
+    luknje: {
+      name: 'Plošča z luknjami', desc: 'Pravokotna plošča z mrežo lukenj, npr. pokrov, perforirana plošča, nosilna plošča.',
+      fields: [['W', 'Širina', 400], ['H', 'Višina', 300], ['r', 'Zaobljenje kotov', 10], ['d', 'Premer lukenj', 10],
+        ['cols', 'Stolpcev', 4, 'kos'], ['rows', 'Vrstic', 3, 'kos'], ['m', 'Odmik od roba (do središča)', 40], ['hd', 'Globina lukenj (0 = skozi)', 0]],
+      make(p, t, tool) {
+        const f = [], dx = p.cols > 1 ? (p.W - 2 * p.m) / (p.cols - 1) : 0, dy = p.rows > 1 ? (p.H - 2 * p.m) / (p.rows - 1) : 0;
+        for (let i = 0; i < p.cols; i++) for (let j = 0; j < p.rows; j++)
+          f.push({ ...C(p.cols > 1 ? p.m + i * dx : p.W / 2, p.rows > 1 ? p.m + j * dy : p.H / 2, p.d, holeOp(p.d, tool), p.hd > 0 ? p.hd : null), name: 'Luknja' });
+        return { parts: [{ name: 'Plošča', w: p.W, h: p.H, r: p.r, feats: f }], notes: [] };
+      },
+    },
+    fronta: {
+      name: 'Fronta z ročajem', desc: 'Vrata ali čelo predala z izrezanim ročajem (podolgovata luknja) in luknjama za skodelični tečaj.',
+      fields: [['W', 'Širina', 396], ['H', 'Višina', 716], ['r', 'Zaobljenje kotov', 0], ['hl', 'Dolžina ročaja', 140], ['hw', 'Širina ročaja', 30],
+        ['ht', 'Odmik ročaja od zgornjega roba', 60], ['hinge', 'Luknje za tečaje ⌀35', true, 'bool'], ['hingeDepth', 'Globina za tečaj', 12.5]],
+      make(p, t, tool) {
+        const f = [{ type: 'rect', x: (p.W - p.hl) / 2, y: p.H - p.ht - p.hw, w: p.hl, h: p.hw, r: p.hw / 2, op: 'inside', through: true, depth: 18, name: 'Ročaj' }];
+        if (p.hinge) for (const y of [100, p.H - 100]) f.push({ ...C(22.5, y, 35, 'pocket', p.hingeDepth), name: 'Tečaj' });
+        return { parts: [{ name: 'Fronta', w: p.W, h: p.H, r: p.r, feats: f }], notes: p.hinge ? ['Tečaji so na levi strani (središče 22,5 mm od roba). Za desna vrata kos obrni.'] : [] };
+      },
+    },
+    krog: {
+      name: 'Okrogla plošča', desc: 'Okrogla mizna plošča, podstavek ali pokrov, po želji z luknjo na sredini.',
+      fields: [['D', 'Premer', 500], ['hole', 'Luknja na sredini (0 = brez)', 0]],
+      make(p, t, tool) {
+        const f = p.hole > 0 ? [{ ...C(p.D / 2, p.D / 2, p.hole, holeOp(p.hole, tool), null), name: 'Sredinska luknja' }] : [];
+        return { parts: [{ name: 'Okrogla plošča', w: p.D, h: p.D, round: true, feats: f }], notes: [] };
+      },
+    },
+  };
+
+  /* zasuk dela za 90° (v nasprotni smeri urinega kazalca), lokalne koordinate */
+  function rot(s, H) {
+    const P = q => ({ x: H - q.y, y: q.x });
+    if (s.type === 'rect') return { ...s, x: H - (s.y + s.h), y: s.x, w: s.h, h: s.w };
+    if (s.type === 'circle') { const c = P({ x: s.cx, y: s.cy }); return { ...s, cx: c.x, cy: c.y }; }
+    return { ...s, pts: s.pts.map(P) };
+  }
+  function shift(s, dx, dy) {
+    if (s.type === 'rect') return { ...s, x: s.x + dx, y: s.y + dy };
+    if (s.type === 'circle') return { ...s, cx: s.cx + dx, cy: s.cy + dy };
+    return { ...s, pts: s.pts.map(q => ({ x: q.x + dx, y: q.y + dy })) };
+  }
+
+  /* Razporeditev "spodaj-levo": units {w,h}, zasedeno [{x,y,w,h}] */
+  function pack(units, occupied, sheet, gap, margin, allowRot) {
+    const occ = occupied.slice(), res = [];
+    const order = units.map((u, i) => i).sort((a, b) => Math.max(units[b].w, units[b].h) - Math.max(units[a].w, units[a].h) || units[b].w * units[b].h - units[a].w * units[a].h);
+    let overflowX = sheet.w + gap * 3;
+    for (const i of order) {
+      const u = units[i]; let best = null;
+      for (const turn of allowRot && u.w !== u.h ? [false, true] : [false]) {
+        const w = turn ? u.h : u.w, h = turn ? u.w : u.h;
+        const xs = [margin, ...occ.map(o => o.x + o.w + gap)], ys = [margin, ...occ.map(o => o.y + o.h + gap)];
+        for (const y of ys) for (const x of xs) {
+          if (x + w > sheet.w - margin + 1e-6 || y + h > sheet.h - margin + 1e-6) continue;
+          if (occ.some(o => x < o.x + o.w + gap - 1e-6 && o.x < x + w + gap - 1e-6 && y < o.y + o.h + gap - 1e-6 && o.y < y + h + gap - 1e-6)) continue;
+          if (!best || y < best.y - 1e-6 || (Math.abs(y - best.y) < 1e-6 && x < best.x)) best = { x, y, turn, w, h };
+        }
+      }
+      if (!best) { best = { x: overflowX, y: margin, turn: false, w: u.w, h: u.h, out: true }; overflowX += u.w + gap; }
+      occ.push({ x: best.x, y: best.y, w: best.w, h: best.h }); res[i] = best;
+    }
+    return res;
+  }
+
+  /* pretvori dele v oblike na plošči */
+  function build(parts, placed) {
+    const shapes = [];
+    parts.forEach((pt, i) => {
+      const pl = placed[i]; let H = pt.h;
+      let outline = pt.round ? { type: 'circle', cx: pt.w / 2, cy: pt.h / 2, r: pt.w / 2 } : { type: 'rect', x: 0, y: 0, w: pt.w, h: pt.h, r: pt.r || 0 };
+      let feats = pt.feats.map(f => ({ ...f }));
+      if (pl.turn) { outline = rot(outline, H); feats = feats.map(f => rot(f, H)); }
+      const gid = `g${Date.now().toString(36)}${i}`;
+      shapes.push({ ...shift(outline, pl.x, pl.y), name: pt.name, op: 'outside', through: true, depth: 18, group: gid, gname: pt.name, outline: true });
+      feats.forEach(f => shapes.push({ ...shift(f, pl.x, pl.y), name: `${pt.name} – ${f.name || 'detajl'}`, group: gid, gname: pt.name }));
+    });
+    return shapes;
+  }
+
+  const make = (key, p, t, tool) => { TOOL = tool; return LIST[key].make(p, t, tool); };
+  return { LIST, make, pack, build, shift };
+})();
+
+</script>
+<script>
+{
+/* ====== BLAGOVNA ZNAMKA — tu nastavite svoje podjetje ====== */
+const CONFIG = {
+  company: 'Vaše podjetje d.o.o.',
+  accent: '#e4002b',
+  logo: null, // npr. 'data:image/svg+xml;base64,...' ali null za privzeti znak
+};
+
+const $ = s => document.querySelector(s);
+const OPS = CNC.OPS, fmt = CNC.fmt;
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+/* ---------- dokument ---------- */
+let nextId = 1;
+const XXL_DEFAULT = { header: 'H DX={DX} DY={DY} DZ={DZ}-IL C=0 T=16973825 R=999 *MM /"def" BX=0 BY={DY} BZ=0 V=10', routerT: 101,
+  drills: [{ d: 5, T: 119, S: 3500, V: 2 }, { d: 8, T: 110, S: 2500, V: 1 }] };
+const mk = (o) => ({ id: nextId++, hidden: false, through: true, depth: 18, ...o });
+function sampleDoc() {
+  nextId = 1;
+  return {
+    v: 2, name: 'Regal - stranica in polica', company: CONFIG.company, post: 'xilog',
+    xxl: { ...XXL_DEFAULT, drills: XXL_DEFAULT.drills.map(d => ({ ...d })) },
+    sheet: { w: 1000, h: 600, t: 18 },
+    tool: { d: 6, rpm: 18000, feed: 2500, plunge: 600, stepdown: 6 },
+    cut: { safeZ: 15, clearZ: 3, overcut: 0.3, stepover: 0.45, climb: true, tabs: 4, tabW: 8, tabH: 3 },
+    shapes: [
+      mk({ name: 'Stranica', type: 'rect', x: 30, y: 30, w: 400, h: 540, r: 0, op: 'outside' }),
+      mk({ name: 'Utor za polico', type: 'rect', x: 30, y: 282, w: 380, h: 18, r: 0, op: 'pocket', through: false, depth: 8 }),
+      mk({ name: 'Ročaj', type: 'rect', x: 170, y: 470, w: 120, h: 34, r: 17, op: 'inside' }),
+      ...[110, 174, 398, 462].map((y, i) => mk({ name: `Luknja ${i + 1}`, type: 'circle', cx: 393, cy: y, r: 2.5, op: 'drill', through: false, depth: 10 })),
+      mk({ name: 'Polica', type: 'rect', x: 480, y: 30, w: 380, h: 300, r: 0, op: 'outside' }),
+      mk({ name: 'Nosilec', type: 'poly', closed: true, op: 'outside',
+        pts: [{ x: 480, y: 380 }, { x: 720, y: 380 }, { x: 720, y: 420 }, { x: 560, y: 560 }, { x: 480, y: 560 }] }),
+      mk({ name: 'Oznaka', type: 'poly', closed: false, op: 'engrave', through: false, depth: 1,
+        pts: [{ x: 500, y: 300 }, { x: 540, y: 300 }, { x: 540, y: 280 }, { x: 580, y: 280 }] }),
+    ],
+  };
+}
+function upgrade(d) {
+  const base = sampleDoc();
+  d = { ...base, ...d, tool: { ...base.tool, ...d.tool }, cut: { ...base.cut, ...d.cut }, sheet: { ...base.sheet, ...d.sheet } };
+  if (!d.xxl) { d.xxl = base.xxl; d.post = 'xilog'; }
+  return d;
+}
+let doc = upgrade(store.get('cnc-doc') || sampleDoc());
+nextId = Math.max(0, ...doc.shapes.map(s => s.id)) + 1;
+const brand = store.get('cnc-brand') || {};
+let sel = null, tool = 'select', showPaths = true, snapOn = true, grid = 5;
+let hist = [], fut = [], result = null;
+
+const snapshot = () => JSON.stringify(doc);
+function commit() { hist.push(lastSaved); if (hist.length > 200) hist.shift(); fut = []; lastSaved = snapshot(); changed(); }
+let lastSaved = snapshot();
+function undo() { if (!hist.length) return; fut.push(snapshot()); doc = JSON.parse(hist.pop()); lastSaved = snapshot(); if (!getSel()) sel = null; changed(); }
+function redo() { if (!fut.length) return; hist.push(snapshot()); doc = JSON.parse(fut.pop()); lastSaved = snapshot(); changed(); }
+const getSel = () => doc.shapes.find(s => s.id === sel);
+
+function changed(opts = {}) {
+  try { result = CNC.generate(doc); } catch (e) { result = { gcode: '', warnings: ['Napaka pri izračunu: ' + e.message], preview: [], stats: { cut: 0, minutes: 0 } }; }
+  store.set('cnc-doc', doc);
+  draw();
+  if (!opts.keepPanel) renderPanel();
+  renderOutput();
+}
+
+/* ---------- pogled ---------- */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let view = { s: 1, ox: 0, oy: 0 }, W = 0, H = 0, userView = false;
+const toScr = p => ({ x: p.x * view.s + view.ox, y: -p.y * view.s + view.oy });
+const toW = (x, y) => ({ x: (x - view.ox) / view.s, y: -(y - view.oy) / view.s });
+function fit() {
+  userView = false;
+  const m = 48, sw = doc.sheet.w, sh = doc.sheet.h;
+  view.s = Math.min((W - 2 * m) / sw, (H - 2 * m) / sh);
+  view.ox = (W - sw * view.s) / 2; view.oy = (H + sh * view.s) / 2; draw();
+}
+function resize() {
+  const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const first = !W; W = r.width; H = r.height;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (first || !userView) fit(); else draw();
+}
+const ro = new ResizeObserver(resize); ro.observe(cv.parentElement);
+
+const probe = document.createElement('i'); probe.style.display = 'none'; document.body.appendChild(probe);
+const css = n => { probe.style.color = `var(${n})`; return getComputedStyle(probe).color; };
+function tracePath(p) {
+  const pts = CNC.pathToPoints(p, 0.3 / view.s + 0.02);
+  ctx.beginPath(); pts.forEach((q, i) => { const s = toScr(q); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
+  if (p.closed) ctx.closePath();
+}
+function draw() {
+  if (!W) return;
+  const c = { bed: css('--bed'), grid: css('--grid'), grid2: css('--grid2'), sheet: css('--sheet'), edge: css('--sheet-edge'), ink: css('--ink'), mute: css('--mute'), path: css('--path') };
+  ctx.fillStyle = c.bed; ctx.fillRect(0, 0, W, H);
+  // mreža
+  const a = toW(0, 0), b = toW(W, H);
+  let gs = grid; while (gs * view.s < 7) gs *= gs === grid ? 2 : 5;
+  ctx.lineWidth = 1;
+  for (const [step, col] of [[gs, c.grid], [gs * 10, c.grid2]]) {
+    ctx.strokeStyle = col; ctx.beginPath();
+    for (let x = Math.floor(a.x / step) * step; x <= b.x; x += step) { const sx = Math.round(toScr({ x, y: 0 }).x) + .5; ctx.moveTo(sx, 0); ctx.lineTo(sx, H); }
+    for (let y = Math.floor(b.y / step) * step; y <= a.y; y += step) { const sy = Math.round(toScr({ x: 0, y }).y) + .5; ctx.moveTo(0, sy); ctx.lineTo(W, sy); }
+    ctx.stroke();
+  }
+  // plošča
+  const o = toScr({ x: 0, y: 0 }), sw = doc.sheet.w * view.s, sh = doc.sheet.h * view.s;
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.18)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+  ctx.fillStyle = c.sheet; ctx.fillRect(o.x, o.y - sh, sw, sh); ctx.restore();
+  ctx.strokeStyle = c.edge; ctx.lineWidth = 1.5; ctx.strokeRect(o.x, o.y - sh, sw, sh);
+  ctx.font = '12px Archivo, system-ui, sans-serif'; ctx.fillStyle = c.mute; ctx.textAlign = 'center';
+  ctx.fillText(`${fmt(doc.sheet.w)} mm`, o.x + sw / 2, o.y + 18);
+  ctx.save(); ctx.translate(o.x - 12, o.y - sh / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(`${fmt(doc.sheet.h)} mm`, 0, 0); ctx.restore();
+  // izhodišče
+  ctx.lineWidth = 2; ctx.strokeStyle = '#e4002b'; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + 28, o.y); ctx.stroke();
+  ctx.strokeStyle = '#15803d'; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x, o.y - 28); ctx.stroke();
+  ctx.fillStyle = c.ink; ctx.beginPath(); ctx.arc(o.x, o.y, 3.5, 0, 7); ctx.fill();
+  // oblike
+  for (const s of doc.shapes) {
+    if (s.hidden) continue;
+    const col = OPS[s.op].color, on = s.id === sel;
+    tracePath(CNC.shapePath(s));
+    if (CNC.isClosed(s)) { ctx.fillStyle = col + (s.op === 'pocket' ? '33' : s.op === 'outside' ? '14' : '1f'); ctx.fill('evenodd'); }
+    ctx.lineWidth = on ? 3 : 1.8; ctx.strokeStyle = col; ctx.setLineDash(s.op === 'engrave' ? [6, 4] : []); ctx.stroke(); ctx.setLineDash([]);
+    if (s.op === 'drill') { const p = toScr({ x: s.cx, y: s.cy }); ctx.beginPath(); ctx.moveTo(p.x - 6, p.y); ctx.lineTo(p.x + 6, p.y); ctx.moveTo(p.x, p.y - 6); ctx.lineTo(p.x, p.y + 6); ctx.stroke(); }
+  }
+  // poti orodja
+  if (showPaths && result) {
+    ctx.strokeStyle = c.path; ctx.lineWidth = 1; ctx.globalAlpha = .85;
+    for (const pv of result.preview) {
+      if (pv.kind === 'path') { tracePath(pv.path); ctx.stroke(); }
+      else if (pv.kind === 'poly') { ctx.beginPath(); pv.pts.forEach((q, i) => { const s = toScr(q); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); }); ctx.stroke(); }
+      else if (pv.kind === 'drill') { const p = toScr(pv); ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, pv.r * view.s), 0, 7); ctx.stroke(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // izbor: ročice
+  const s = getSel();
+  if (s && !s.hidden) handles(s).forEach(h => { const p = toScr(h); ctx.fillStyle = '#fff'; ctx.strokeStyle = CONFIG_ACCENT(); ctx.lineWidth = 2; ctx.fillRect(p.x - 5, p.y - 5, 10, 10); ctx.strokeRect(p.x - 5, p.y - 5, 10, 10); });
+  drawDraft();
+}
+const CONFIG_ACCENT = () => css('--accent');
+
+/* ---------- risanje: snap, ročice, zadetki ---------- */
+function keyPoints() {
+  const P = [{ x: 0, y: 0 }, { x: doc.sheet.w, y: 0 }, { x: 0, y: doc.sheet.h }, { x: doc.sheet.w, y: doc.sheet.h }];
+  for (const s of doc.shapes) {
+    if (s.hidden) continue;
+    if (s.type === 'rect') P.push({ x: s.x, y: s.y }, { x: s.x + s.w, y: s.y }, { x: s.x, y: s.y + s.h }, { x: s.x + s.w, y: s.y + s.h }, { x: s.x + s.w / 2, y: s.y + s.h / 2 });
+    else if (s.type === 'circle') P.push({ x: s.cx, y: s.cy });
+    else P.push(...s.pts);
+  }
+  if (draft && draft.pts) P.push(...draft.pts);
+  return P;
+}
+let snapHit = null;
+function snap(p, ignoreId) {
+  snapHit = null;
+  if (!snapOn) return p;
+  let best = null, bd = 10 / view.s;
+  for (const q of keyPoints()) { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q; } }
+  if (best) { snapHit = best; return { ...best }; }
+  return { x: Math.round(p.x / grid) * grid, y: Math.round(p.y / grid) * grid };
+}
+function handles(s) {
+  if (s.type === 'rect') return [{ x: s.x + s.w, y: s.y + s.h, k: 'tr' }, { x: s.x, y: s.y, k: 'bl' }];
+  if (s.type === 'circle') return [{ x: s.cx + s.r, y: s.cy, k: 'r' }];
+  return s.pts.map((p, i) => ({ ...p, k: i }));
+}
+function hit(p) {
+  const tol = 7 / view.s;
+  for (let i = doc.shapes.length - 1; i >= 0; i--) {
+    const s = doc.shapes[i]; if (s.hidden) continue;
+    const pts = CNC.pathToPoints(CNC.shapePath(s), 0.5);
+    const n = CNC.isClosed(s) ? pts.length : pts.length - 1;
+    for (let k = 0; k < n; k++) {
+      const a = pts[k], b = pts[(k + 1) % pts.length], dx = b.x - a.x, dy = b.y - a.y;
+      let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / ((dx * dx + dy * dy) || 1); t = Math.max(0, Math.min(1, t));
+      if (Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy) < tol) return s;
+    }
+  }
+  for (let i = doc.shapes.length - 1; i >= 0; i--) {
+    const s = doc.shapes[i]; if (s.hidden || !CNC.isClosed(s)) continue;
+    if (CNC.pointInPoly(p, CNC.pathToPoints(CNC.shapePath(s), 0.5))) return s;
+  }
+  return null;
+}
+
+/* ---------- osnutek ---------- */
+let draft = null, drag = null, cursor = { x: 0, y: 0 }, typed = '', spaceDown = false;
+function drawDraft() {
+  if (snapHit) { const p = toScr(snapHit); ctx.strokeStyle = CONFIG_ACCENT(); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, 7); ctx.stroke(); }
+  if (!draft) return;
+  ctx.strokeStyle = CONFIG_ACCENT(); ctx.lineWidth = 1.8; ctx.setLineDash([5, 4]);
+  const label = (t, p) => { ctx.setLineDash([]); ctx.font = '600 13px Archivo, system-ui, sans-serif'; const w = ctx.measureText(t).width + 12;
+    ctx.fillStyle = css('--ink'); ctx.fillRect(p.x + 12, p.y + 10, w, 22); ctx.fillStyle = css('--bg'); ctx.textAlign = 'left'; ctx.fillText(t, p.x + 18, p.y + 25); };
+  if (draft.type === 'rect') {
+    const r = normRect(draft.a, draft.b), p = toScr({ x: r.x, y: r.y + r.h });
+    ctx.strokeRect(p.x, p.y, r.w * view.s, r.h * view.s); label(`${fmt(r.w)} × ${fmt(r.h)} mm`, toScr(draft.b));
+  } else if (draft.type === 'circle') {
+    const c = toScr(draft.a), r = Math.hypot(draft.b.x - draft.a.x, draft.b.y - draft.a.y);
+    ctx.beginPath(); ctx.arc(c.x, c.y, r * view.s, 0, 7); ctx.stroke(); label(`⌀ ${fmt(2 * r)} mm`, toScr(draft.b));
+  } else if (draft.type === 'poly') {
+    const pts = [...draft.pts, draft.b];
+    ctx.beginPath(); pts.forEach((q, i) => { const s = toScr(q); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); }); ctx.stroke();
+    const l = draft.pts[draft.pts.length - 1], d = Math.hypot(draft.b.x - l.x, draft.b.y - l.y);
+    const ang = Math.atan2(draft.b.y - l.y, draft.b.x - l.x) * 180 / Math.PI;
+    label(typed ? `dolžina: ${typed}▍ mm` : `${fmt(d)} mm  ∠ ${fmt(Math.round(ang * 10) / 10)}°`, toScr(draft.b));
+  }
+  ctx.setLineDash([]);
+}
+const normRect = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+function ortho(from, p, on) {
+  if (!on) return p;
+  const dx = p.x - from.x, dy = p.y - from.y, L = Math.hypot(dx, dy), a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * Math.PI / 4;
+  return { x: from.x + Math.round(L * Math.cos(a) * 1000) / 1000, y: from.y + Math.round(L * Math.sin(a) * 1000) / 1000 };
+}
+function addShape(s) { const n = doc.shapes.filter(x => x.type === s.type).length + 1;
+  const base = { rect: 'Pravokotnik', circle: 'Krog', poly: s.closed ? 'Oblika' : 'Črta' }[s.type];
+  const sh = mk({ name: `${base} ${n}`, depth: doc.sheet.t, ...s }); doc.shapes.push(sh); sel = sh.id; commit(); }
+function finishPoly(close) {
+  if (!draft || draft.type !== 'poly') return;
+  const pts = draft.pts; draft = null; typed = '';
+  if (pts.length < 2 || (close && pts.length < 3)) { draw(); return; }
+  addShape(close ? { type: 'poly', pts, closed: true, op: 'outside' } : { type: 'poly', pts, closed: false, op: 'engrave', through: false, depth: 1 });
+}
+
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const r = cv.getBoundingClientRect(), raw = toW(e.clientX - r.left, e.clientY - r.top);
+  if (e.button === 1 || e.button === 2 || spaceDown || tool === 'pan') { userView = true; drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: view.ox, oy: view.oy }; cv.style.cursor = 'grabbing'; return; }
+  const p = snap(raw);
+  if (tool === 'select') {
+    const s = getSel();
+    if (s) for (const h of handles(s)) { const q = toScr(h), m = toScr(raw); if (Math.abs(q.x - m.x) < 8 && Math.abs(q.y - m.y) < 8) { drag = { kind: 'handle', k: h.k, orig: JSON.stringify(s) }; return; } }
+    const h = hit(raw);
+    sel = h ? h.id : null;
+    if (h) drag = { kind: 'move', start: p, orig: JSON.stringify(groupOf(h)), moved: false };
+    renderPanel(); draw(); return;
+  }
+  if (tool === 'rect' || tool === 'circle') { draft = { type: tool, a: p, b: p }; draw(); return; }
+  if (tool === 'poly') {
+    if (!draft) { draft = { type: 'poly', pts: [p], b: p }; draw(); return; }
+    const first = draft.pts[0], ps = ortho(draft.pts[draft.pts.length - 1], p, e.shiftKey);
+    if (draft.pts.length >= 3 && Math.hypot(ps.x - first.x, ps.y - first.y) < 1e-6) { finishPoly(true); return; }
+    const last = draft.pts[draft.pts.length - 1];
+    if (Math.hypot(ps.x - last.x, ps.y - last.y) > 1e-6) draft.pts.push(ps);
+    typed = ''; draw();
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(), raw = toW(e.clientX - r.left, e.clientY - r.top);
+  if (drag && drag.kind === 'pan') { view.ox = drag.ox + e.clientX - drag.sx; view.oy = drag.oy + e.clientY - drag.sy; draw(); return; }
+  const p = snap(raw); cursor = p;
+  $('#xy').textContent = `X ${fmt(p.x)}  Y ${fmt(p.y)}`;
+  if (drag && drag.kind === 'move') {
+    const o = JSON.parse(drag.orig), dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+    for (const og of o) { const s = doc.shapes.find(x => x.id === og.id); if (!s) continue;
+      if (s.type === 'rect') { s.x = og.x + dx; s.y = og.y + dy; } else if (s.type === 'circle') { s.cx = og.cx + dx; s.cy = og.cy + dy; }
+      else s.pts = og.pts.map(q => ({ x: q.x + dx, y: q.y + dy })); }
+    drag.moved = drag.moved || dx || dy; result = CNC.generate(doc); draw(); return;
+  }
+  if (drag && drag.kind === 'handle') {
+    const s = getSel(), o = JSON.parse(drag.orig);
+    if (s.type === 'rect') {
+      if (drag.k === 'tr') { s.w = Math.max(1, p.x - o.x); s.h = Math.max(1, p.y - o.y); }
+      else { s.x = Math.min(p.x, o.x + o.w - 1); s.y = Math.min(p.y, o.y + o.h - 1); s.w = o.x + o.w - s.x; s.h = o.y + o.h - s.y; }
+    } else if (s.type === 'circle') s.r = Math.max(0.5, Math.hypot(p.x - s.cx, p.y - s.cy));
+    else s.pts[drag.k] = p;
+    drag.moved = true; result = CNC.generate(doc); draw(); return;
+  }
+  if (draft) { draft.b = draft.type === 'poly' ? ortho(draft.pts[draft.pts.length - 1], p, e.shiftKey) : p; }
+  draw();
+});
+cv.addEventListener('pointerup', () => {
+  if (drag) { const d = drag; drag = null; cv.style.cursor = '';
+    if ((d.kind === 'move' || d.kind === 'handle') && d.moved) { commit(); } return; }
+  if (draft && (draft.type === 'rect' || draft.type === 'circle')) {
+    const d = draft; draft = null;
+    if (d.type === 'rect') { const r = normRect(d.a, d.b); if (r.w >= 1 && r.h >= 1) addShape({ type: 'rect', ...r, r: 0, op: 'outside' }); else hint('Povleci z miško, da narišeš pravokotnik.'); }
+    else { const rr = Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y); if (rr >= 0.5) addShape({ type: 'circle', cx: d.a.x, cy: d.a.y, r: rr, op: 'inside' }); else hint('Klikni središče in povleci do želenega polmera.'); }
+    draw();
+  }
+});
+cv.addEventListener('dblclick', () => { if (tool === 'poly' && draft) finishPoly(false); });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => {
+  e.preventDefault(); userView = true;
+  const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, w = toW(mx, my);
+  view.s = Math.max(0.05, Math.min(80, view.s * Math.exp(-e.deltaY * 0.0015)));
+  view.ox = mx - w.x * view.s; view.oy = my + w.y * view.s; draw();
+}, { passive: false });
+
+/* ---------- tipkovnica ---------- */
+const inField = e => /INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
+window.addEventListener('keydown', e => {
+  if (inField(e)) return;
+  const k = e.key, mod = e.ctrlKey || e.metaKey;
+  if (k === ' ') { spaceDown = true; e.preventDefault(); return; }
+  if (mod && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if (mod && k.toLowerCase() === 'd') { e.preventDefault(); duplicate(); return; }
+  if (draft && draft.type === 'poly') {
+    if (/^[0-9.,]$/.test(k)) { typed += k === ',' ? '.' : k; draw(); return; }
+    if (k === 'Backspace') { if (typed) typed = typed.slice(0, -1); else if (draft.pts.length > 1) draft.pts.pop(); else draft = null; draw(); return; }
+    if (k === 'Enter') {
+      const L = parseFloat(typed);
+      if (L > 0) { const l = draft.pts[draft.pts.length - 1], dx = draft.b.x - l.x, dy = draft.b.y - l.y, d = Math.hypot(dx, dy) || 1;
+        const a = d > 1e-9 ? { x: dx / d, y: dy / d } : { x: 1, y: 0 };
+        draft.pts.push({ x: +(l.x + a.x * L).toFixed(3), y: +(l.y + a.y * L).toFixed(3) }); typed = ''; draw(); }
+      else finishPoly(false);
+      return;
+    }
+    if (k === 'c' || k === 'C') { finishPoly(true); return; }
+  }
+  if (k === 'Escape') { if (draft) { draft = null; typed = ''; } else { sel = null; renderPanel(); } draw(); return; }
+  if ((k === 'Delete' || k === 'Backspace') && getSel()) { removeSel(); return; }
+  if (k.startsWith('Arrow') && getSel()) {
+    e.preventDefault(); const st = e.shiftKey ? 10 : 1, dx = k === 'ArrowLeft' ? -st : k === 'ArrowRight' ? st : 0, dy = k === 'ArrowDown' ? -st : k === 'ArrowUp' ? st : 0;
+    groupOf(getSel()).forEach(x => moveShape(x, dx, dy)); commit(); return;
+  }
+  const map = { v: 'select', r: 'rect', c: 'circle', l: 'poly', h: 'pan' };
+  if (!mod && map[k.toLowerCase()]) setTool(map[k.toLowerCase()]);
+  if (!mod && k.toLowerCase() === 'f') fit();
+  if (!mod && k.toLowerCase() === 'p') openTpl();
+});
+window.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
+
+function moveShape(s, dx, dy) {
+  if (s.type === 'rect') { s.x += dx; s.y += dy; } else if (s.type === 'circle') { s.cx += dx; s.cy += dy; }
+  else s.pts.forEach(p => { p.x += dx; p.y += dy; });
+}
+const groupOf = s => s && s.group ? doc.shapes.filter(x => x.group === s.group) : (s ? [s] : []);
+function duplicate() {
+  const s = getSel(); if (!s) return; const g = s.group ? 'g' + Date.now().toString(36) : null, ref = groupOf(s);
+  let first = null;
+  ref.forEach(x => { const c = JSON.parse(JSON.stringify(x)); c.id = nextId++; if (g) c.group = g; else c.name = x.name + ' (kopija)'; moveShape(c, 20, -20); doc.shapes.push(c); if (x.id === s.id) first = c; });
+  sel = first.id; commit();
+}
+function removeSel() { const ids = new Set(groupOf(getSel()).map(x => x.id)); doc.shapes = doc.shapes.filter(s => !ids.has(s.id)); sel = null; commit(); }
+
+const HINTS = {
+  select: 'Klikni element, da ga izbereš. Vleci za premik, kvadratki spremenijo velikost. Puščice premaknejo za 1 mm (Shift: 10 mm).',
+  rect: 'Povleci od enega kota do nasprotnega. Točne mere vpiši desno.',
+  circle: 'Klikni središče in povleci do polmera.',
+  poly: 'Klikaj točke. Vtipkaj dolžino + Enter za točen odsek. Klik na prvo točko ali C zapre obliko, dvoklik ali Enter konča črto. Shift = koti po 45°.',
+  pan: 'Vleci za premik pogleda. Kolešček = povečava. F = prilagodi.',
+};
+function hint(t) { $('#hint').textContent = t; }
+function setTool(t) {
+  tool = t; draft = null; typed = '';
+  document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'select' ? 'default' : 'crosshair';
+  hint(HINTS[t]); draw();
+}
+document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+/* ---------- desni panel ---------- */
+const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const num = (id, label, v, step = 1, unit = 'mm', min) => `<label class="f"><span>${label}</span><input id="${id}" type="number" inputmode="decimal" step="${step}" ${min !== undefined ? `min="${min}"` : ''} value="${fmt(v)}"><em>${unit}</em></label>`;
+function renderPanel() {
+  const s = getSel(), el = $('#selbox');
+  if (!s) {
+    const rows = [], seen = new Set();
+    for (const x of doc.shapes) {
+      if (x.group) { if (seen.has(x.group)) continue; seen.add(x.group);
+        const g = doc.shapes.filter(y => y.group === x.group), o = g.find(y => y.outline) || g[0];
+        rows.push(`<li><button data-pick="${o.id}"><i style="background:${OPS[o.op].color}"></i><b>${esc(x.gname || o.name)}</b><span>kos · ${g.length} ${g.length === 1 ? 'element' : g.length < 5 ? 'elementi' : 'elementov'}</span></button></li>`);
+      } else rows.push(`<li><button data-pick="${x.id}"><i style="background:${OPS[x.op].color}"></i><b>${esc(x.name)}</b><span>${OPS[x.op].label}</span></button></li>`);
+    }
+    el.innerHTML = `<h2>Elementi <small>${doc.shapes.length}</small></h2>
+      <div class="row" style="margin:0 0 10px"><button class="ghost" id="tpl-open2">+ Iz predloge</button><button class="ghost" id="arrange" ${doc.shapes.length ? '' : 'disabled'}>Razporedi na ploščo</button></div>
+      <ul class="list">${rows.join('') || '<li class="empty">Še ni elementov. Nariši kos z orodji levo ali dodaj kos iz predloge.</li>'}</ul>`;
+    $('#tpl-open2').addEventListener('click', openTpl); $('#arrange').addEventListener('click', arrangeAll);
+    el.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.pick; setTool('select'); renderPanel(); }));
+    return;
+  }
+  const ops = CNC.allowedOps(s);
+  let geo = '';
+  if (s.type === 'rect') geo = num('gx', 'X', s.x, 1) + num('gy', 'Y', s.y, 1) + num('gw', 'Širina', s.w, 1, 'mm', 0.1) + num('gh', 'Višina', s.h, 1, 'mm', 0.1) + num('gr', 'Zaobljenje kotov', s.r || 0, 0.5, 'mm', 0);
+  else if (s.type === 'circle') geo = num('gcx', 'Središče X', s.cx) + num('gcy', 'Središče Y', s.cy) + num('gd', 'Premer', s.r * 2, 0.5, 'mm', 0.1);
+  else geo = `<div class="pts">${s.pts.map((p, i) => `<div class="pt"><span>${i + 1}</span><input data-px="${i}" type="number" step="1" value="${fmt(p.x)}" aria-label="Točka ${i + 1} X"><input data-py="${i}" type="number" step="1" value="${fmt(p.y)}" aria-label="Točka ${i + 1} Y"><button class="x" data-pdel="${i}" aria-label="Odstrani točko ${i + 1}">×</button></div>`).join('')}</div>
+    <label class="chk"><input id="gclosed" type="checkbox" ${s.closed ? 'checked' : ''}> Zaprta oblika (kos)</label>`;
+  const canThrough = s.op !== 'engrave' && s.op !== 'pocket';
+  const grp = s.group ? doc.shapes.filter(x => x.group === s.group) : null;
+  el.innerHTML = `<h2><button class="back" id="back" aria-label="Nazaj na seznam">←</button><input id="gname" class="name" value="${esc(s.name)}" aria-label="Ime elementa"></h2>
+    ${grp ? `<div class="grp"><span>Del kosa <b>${esc(s.gname || '')}</b> (${grp.length} el.) – premik, kopija in brisanje veljajo za cel kos.</span><button class="ghost" id="ungroup">Razdruži</button></div>` : ''}
+    <div class="grid2">${geo}</div>
+    <label class="f wide"><span>Operacija</span><select id="gop">${ops.map(o => `<option value="${o}" ${o === s.op ? 'selected' : ''}>${OPS[o].label}</option>`).join('')}</select></label>
+    ${canThrough ? `<label class="chk"><input id="gthr" type="checkbox" ${s.through ? 'checked' : ''}> Skozi celo ploščo (${fmt(doc.sheet.t + doc.cut.overcut)} mm)</label>` : ''}
+    ${!canThrough || !s.through ? num('gdep', 'Globina', s.depth, 0.5, 'mm', 0.1) : ''}
+    <p class="note">${opNote(s.op)}</p>
+    <div class="row"><button id="gdup" class="ghost">Podvoji</button><button id="gdel" class="ghost danger">Izbriši</button></div>`;
+  const bindNum = (id, fn) => { const i = $('#' + id); if (i) i.addEventListener('change', () => { const v = parseFloat(i.value); if (isFinite(v)) { fn(v); commit(); } else renderPanel(); }); };
+  bindNum('gx', v => s.x = v); bindNum('gy', v => s.y = v); bindNum('gw', v => s.w = Math.max(0.1, v)); bindNum('gh', v => s.h = Math.max(0.1, v)); bindNum('gr', v => s.r = Math.max(0, v));
+  bindNum('gcx', v => s.cx = v); bindNum('gcy', v => s.cy = v); bindNum('gd', v => s.r = Math.max(0.05, v / 2)); bindNum('gdep', v => s.depth = Math.max(0.1, v));
+  el.querySelectorAll('[data-px]').forEach(i => i.addEventListener('change', () => { s.pts[+i.dataset.px].x = parseFloat(i.value) || 0; commit(); }));
+  el.querySelectorAll('[data-py]').forEach(i => i.addEventListener('change', () => { s.pts[+i.dataset.py].y = parseFloat(i.value) || 0; commit(); }));
+  el.querySelectorAll('[data-pdel]').forEach(b => b.addEventListener('click', () => { if (s.pts.length > 2) { s.pts.splice(+b.dataset.pdel, 1); if (s.pts.length < 3) s.closed = false; fixOp(s); commit(); } }));
+  const gc = $('#gclosed'); if (gc) gc.addEventListener('change', () => { if (gc.checked && s.pts.length < 3) { gc.checked = false; return; } s.closed = gc.checked; fixOp(s); commit(); });
+  $('#gname').addEventListener('change', e => { s.name = e.target.value || s.name; commit(); });
+  $('#gop').addEventListener('change', e => { s.op = e.target.value; if (s.op === 'engrave' && s.depth > 3) s.depth = 1; commit(); });
+  const th = $('#gthr'); if (th) th.addEventListener('change', () => { s.through = th.checked; commit(); });
+  $('#gdup').addEventListener('click', duplicate); $('#gdel').addEventListener('click', removeSel);
+  $('#back').addEventListener('click', () => { sel = null; renderPanel(); draw(); });
+  const ug = $('#ungroup'); if (ug) ug.addEventListener('click', () => { grp.forEach(x => { delete x.group; delete x.outline; }); commit(); });
+}
+function fixOp(s) { const a = CNC.allowedOps(s); if (!a.includes(s.op)) s.op = a[0]; }
+function opNote(op) {
+  return {
+    outside: 'Rezkar teče zunaj črte – kos ima točno narisano mero. Mostički držijo kos do konca.',
+    inside: 'Rezkar teče znotraj črte – luknja ima točno narisano mero.',
+    pocket: 'Odstrani ves material znotraj oblike do izbrane globine.',
+    engrave: 'Središče rezkarja gre točno po črti (gravura, utor, oznaka).',
+    drill: 'Vrtanje: če imaš sveder tega premera (Material in orodje), gre luknja na sveder, sicer jo naredi rezkar.',
+  }[op];
+}
+
+/* nastavitve materiala in orodja */
+const SET = [
+  ['sheet', 'w', 'Širina plošče', 1, 'mm'], ['sheet', 'h', 'Višina plošče', 1, 'mm'], ['sheet', 't', 'Debelina', 0.5, 'mm'],
+  ['tool', 'd', 'Premer rezkarja', 0.5, 'mm'], ['tool', 'rpm', 'Vrtljaji', 500, 'obr/min'], ['tool', 'feed', 'Pomik', 100, 'mm/min'],
+  ['tool', 'plunge', 'Pomik potopa', 50, 'mm/min'], ['tool', 'stepdown', 'Globina na prehod', 0.5, 'mm'],
+  ['cut', 'stepover', 'Prekrivanje žepa', 5, '% fi', 100], ['cut', 'overcut', 'Prerez pod ploščo', 0.1, 'mm'],
+  ['cut', 'safeZ', 'Varna višina Z', 1, 'mm'], ['cut', 'tabs', 'Mostički na kos', 1, 'kos'], ['cut', 'tabW', 'Širina mostička', 1, 'mm'], ['cut', 'tabH', 'Višina mostička', 0.5, 'mm'],
+];
+function renderSettings() {
+  $('#setbox').innerHTML = `<div class="grid2">${SET.map(([g, k, l, st, u, mul]) => num(`s-${g}-${k}`, l, doc[g][k] * (mul || 1), st, u, 0)).join('')}</div>
+    <label class="f wide"><span>Smer rezkanja</span><select id="s-dir"><option value="1" ${doc.cut.climb ? 'selected' : ''}>Soteklo (climb) – lepši rob</option><option value="0" ${!doc.cut.climb ? 'selected' : ''}>Protismerno (conventional)</option></select></label>
+    <label class="f wide"><span>Krmilnik stroja</span><select id="s-post">${Object.entries(CNC.POSTS).map(([k, p]) => `<option value="${k}" ${k === doc.post ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label>
+    ${doc.post === 'xilog' ? `<div class="xxl">
+      ${num('x-rt', 'Rezkar – številka orodja T', doc.xxl.routerT, 1, 'T')}
+      <p class="sub">Svedri (luknje s tem premerom gredo v vrtine B)</p>
+      <div class="drills"><span>⌀ mm</span><span>T</span><span>S obr/min</span><span>V</span><span></span>
+      ${doc.xxl.drills.map((b, i) => `<input data-dr="${i}" data-k="d" type="number" step="0.5" value="${fmt(b.d)}" aria-label="Premer svedra ${i + 1}"><input data-dr="${i}" data-k="T" type="number" value="${b.T}" aria-label="Orodje T"><input data-dr="${i}" data-k="S" type="number" step="100" value="${b.S}" aria-label="Vrtljaji"><input data-dr="${i}" data-k="V" type="number" value="${b.V}" aria-label="Hitrost V"><button class="x" data-drdel="${i}" aria-label="Odstrani sveder">×</button>`).join('')}
+      </div><button class="ghost small" id="x-add">+ Dodaj sveder</button>
+      <label class="f wide"><span>Glava programa (H). {DX} {DY} {DZ} se zamenjajo z merami plošče.</span><textarea id="x-head" rows="3">${esc(doc.xxl.header)}</textarea></label>
+    </div>` : ''}`;
+  SET.forEach(([g, k, , , , mul]) => $(`#s-${g}-${k}`).addEventListener('change', e => {
+    let v = parseFloat(e.target.value); if (!isFinite(v) || v < 0) { renderSettings(); return; }
+    if (k === 'tabs') v = Math.round(v); doc[g][k] = v / (mul || 1);
+    if (g === 'sheet' || k === 'd') { if (doc.tool.d <= 0) doc.tool.d = 0.1; }
+    commit(); if (g === 'sheet') fit();
+  }));
+  $('#s-dir').addEventListener('change', e => { doc.cut.climb = e.target.value === '1'; commit(); });
+  $('#s-post').addEventListener('change', e => { doc.post = e.target.value; commit(); renderSettings(); });
+  if (doc.post === 'xilog') {
+    $('#x-rt').addEventListener('change', e => { const v = parseInt(e.target.value); if (v >= 0) { doc.xxl.routerT = v; commit(); } });
+    document.querySelectorAll('[data-dr]').forEach(i => i.addEventListener('change', () => { const v = parseFloat(i.value); if (isFinite(v) && v >= 0) { doc.xxl.drills[+i.dataset.dr][i.dataset.k] = v; commit(); } }));
+    document.querySelectorAll('[data-drdel]').forEach(b => b.addEventListener('click', () => { doc.xxl.drills.splice(+b.dataset.drdel, 1); commit(); renderSettings(); }));
+    $('#x-add').addEventListener('click', () => { doc.xxl.drills.push({ d: 10, T: 100, S: 3000, V: 1 }); commit(); renderSettings(); });
+    $('#x-head').addEventListener('change', e => { doc.xxl.header = e.target.value.trim() || XXL_DEFAULT.header; commit(); });
+  }
+}
+
+/* izhod */
+function renderOutput() {
+  const r = result; if (!r) return;
+  const m = r.stats.minutes || 0;
+  const sec = Math.round(m * 60); $('#time').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  $('#len').textContent = `${fmt(Math.round((r.stats.cut || 0) / 10) / 100)} m`;
+  $('#nops').textContent = r.stats.ops || 0;
+  const grpW = new Map();
+  for (const w of r.warnings) { const i = w.indexOf(': '), k = i > 0 ? w.slice(i + 2) : w, n = i > 0 ? w.slice(0, i) : ''; if (!grpW.has(k)) grpW.set(k, []); grpW.get(k).push(n); }
+  $('#warn').innerHTML = grpW.size ? [...grpW].map(([k, ns]) => `<li>${ns[0] ? `<b>${esc(ns[0])}${ns.length > 1 ? ` in še ${ns.length - 1}` : ''}</b>: ` : ''}${esc(k)}</li>`).join('') : '<li class="ok">Ni opozoril – program je pripravljen.</li>';
+  $('#warn').className = r.warnings.length ? 'warn' : 'warn good';
+  const lines = r.gcode.replace(/\r/g, '').split('\n');
+  $('#gcode').textContent = lines.slice(0, 400).join('\n') + (lines.length > 400 ? `\n… še ${lines.length - 400} vrstic` : '');
+  $('#gclines').textContent = `${lines.length - 1} vrstic`;
+  const lbl = doc.post === 'xilog' ? 'Prenesi XXL' : 'Prenesi G-kodo';
+  $('#dl-nc').textContent = lbl; $('#dl-nc2').textContent = lbl;
+  document.querySelector('#gsum').textContent = doc.post === 'xilog' ? 'Predogled programa XXL' : 'Predogled G-kode';
+}
+
+/* ---------- datoteke ---------- */
+const slug = () => (doc.name || 'projekt').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'projekt';
+const dlP = (window.claude && window.claude.use) ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+function crc32(b) { let c, t = crc32.t || (crc32.t = Array.from({ length: 256 }, (_, n) => { c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; }));
+  let x = ~0; for (const v of b) x = t[(x ^ v) & 255] ^ (x >>> 8); return (~x) >>> 0; }
+function zip(files) {
+  const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+  const u16 = v => [v & 255, v >> 8 & 255], u32 = v => [v & 255, v >> 8 & 255, v >> 16 & 255, v >>> 24 & 255];
+  for (const f of files) {
+    const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+    const h = [0x50, 0x4b, 3, 4, ...u16(20), ...u16(0x800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)];
+    parts.push(new Uint8Array(h), name, data);
+    cen.push(new Uint8Array([0x50, 0x4b, 1, 2, ...u16(20), ...u16(20), ...u16(0x800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), name);
+    off += h.length + name.length + data.length;
+  }
+  const cs = cen.reduce((a, b) => a + b.length, 0);
+  return new Blob([...parts, ...cen, new Uint8Array([0x50, 0x4b, 5, 6, 0, 0, 0, 0, ...u16(files.length), ...u16(files.length), ...u32(cs), ...u32(off), 0, 0])], { type: 'application/zip' });
+}
+async function save(name, data) {
+  const d = await dlP;
+  if (d) {
+    const ext = name.split('.').pop();
+    const ok = ['svg', 'json', 'txt', 'zip'].includes(ext);
+    try { await d.save(ok ? { filename: name, data } : { filename: name + '.zip', data: zip([{ name, data }]) }); toast(ok ? `Shranjeno: ${name}` : `Shranjeno: ${name}.zip (v njem ${name})`); }
+    catch (e) { toast(e && e.code === 'declined' ? 'Shranjevanje preklicano.' : 'Datoteke ni bilo mogoče shraniti – uporabi Kopiraj.'); }
+    return;
+  }
+  const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/plain' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast(`Prenos: ${name}`);
+}
+const ext = () => CNC.POSTS[doc.post].ext;
+$('#dl-nc').addEventListener('click', () => save(`${slug()}.${ext()}`, result.gcode));
+$('#dl-nc2').addEventListener('click', () => save(`${slug()}.${ext()}`, result.gcode));
+$('#dl-dxf').addEventListener('click', () => save(`${slug()}.dxf`, CNC.toDXF(doc)));
+$('#dl-svg').addEventListener('click', () => save(`${slug()}.svg`, CNC.toSVG(doc)));
+$('#dl-zip').addEventListener('click', () => save(`${slug()}.zip`, zip([
+  { name: `${slug()}.${ext()}`, data: result.gcode }, { name: `${slug()}.dxf`, data: CNC.toDXF(doc) },
+  { name: `${slug()}.svg`, data: CNC.toSVG(doc) }, { name: `${slug()}.json`, data: JSON.stringify(doc, null, 1) }])));
+/* izvoz po kosih: vsak kos svoj program (za stroj, kjer kos leži na podstavkih) */
+function partDocs(withOutline) {
+  const names = new Map();
+  return units().map(u => {
+    const o = u.shapes.find(x => x.outline) || u.shapes.find(x => x.op === 'outside') || null;
+    const b = o ? CNC.shapeBounds(o) : u.b;
+    let nm = (o && (o.gname || o.name)) || u.shapes[0].name || 'kos';
+    const k = nm.toLowerCase(); names.set(k, (names.get(k) || 0) + 1); if (names.get(k) > 1) nm += ` ${names.get(k)}`;
+    const shapes = u.shapes.filter(x => withOutline || x !== o).map(x => { const c = JSON.parse(JSON.stringify(x)); moveShape(c, -b.x0, -b.y0); return c; });
+    return { name: nm, doc: { ...doc, name: `${doc.name} - ${nm}`, sheet: { ...doc.sheet, w: +(b.x1 - b.x0).toFixed(3), h: +(b.y1 - b.y0).toFixed(3) }, shapes } };
+  });
+}
+const fileSlug = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'kos';
+$('#dl-parts').addEventListener('click', () => {
+  const P = partDocs($('#with-outline').checked); if (!P.length) { toast('Ni kosov za izvoz.'); return; }
+  const warn = [], files = P.map(p => { const r = CNC.generate(p.doc); r.warnings.forEach(w => warn.push(w)); return { name: `${fileSlug(p.name)}.${ext()}`, data: r.gcode }; });
+  save(`${slug()}-kosi.zip`, zip(files));
+});
+$('#dl-json').addEventListener('click', () => save(`${slug()}.json`, JSON.stringify(doc, null, 1)));
+$('#copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(result.gcode); toast('Program kopiran.'); } catch { toast('Kopiranje ni dovoljeno v tem oknu.'); } });
+$('#open').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const d = JSON.parse(await f.text()); if (!d.sheet || !Array.isArray(d.shapes)) throw 0;
+    hist.push(snapshot()); doc = { ...sampleDoc(), ...d }; nextId = Math.max(0, ...doc.shapes.map(s => s.id)) + 1; sel = null; lastSaved = snapshot(); renderSettings(); changed(); fit(); toast(`Odprt projekt: ${doc.name}`); }
+  catch { toast('To ni veljavna projektna datoteka (.json).'); }
+  e.target.value = '';
+});
+$('#new').addEventListener('click', () => { hist.push(snapshot()); const d = sampleDoc(); d.shapes = []; d.name = 'Nov projekt'; d.sheet = { w: 2800, h: 2070, t: 18 }; doc = d; sel = null; lastSaved = snapshot(); renderSettings(); changed(); fit(); $('#pname').value = doc.name; toast('Nov prazen projekt. Razveljavi s Ctrl+Z.'); });
+$('#sample').addEventListener('click', () => { hist.push(snapshot()); doc = sampleDoc(); sel = null; lastSaved = snapshot(); renderSettings(); changed(); fit(); $('#pname').value = doc.name; });
+$('#undo').addEventListener('click', undo); $('#redo').addEventListener('click', redo);
+$('#pname').value = doc.name; $('#pname').addEventListener('change', e => { doc.name = e.target.value; commit(); });
+$('#fit').addEventListener('click', fit);
+$('#paths').addEventListener('change', e => { showPaths = e.target.checked; draw(); });
+$('#snap').addEventListener('change', e => { snapOn = e.target.checked; });
+$('#gridsel').addEventListener('change', e => { grid = +e.target.value; draw(); });
+
+let tt; function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2800); }
+
+/* ---------- znamka ---------- */
+function applyBrand() {
+  const name = brand.company || CONFIG.company, acc = brand.accent || CONFIG.accent, logo = brand.logo || CONFIG.logo;
+  document.documentElement.style.setProperty('--accent', acc);
+  $('#cname').textContent = name; doc.company = name;
+  $('#logo').innerHTML = logo ? `<img src="${esc(logo)}" alt="">` : `<span>${esc(name.trim().slice(0, 1).toUpperCase())}</span>`;
+  $('#b-name').value = name; $('#b-acc').value = acc;
+}
+$('#b-name').addEventListener('change', e => { brand.company = e.target.value; store.set('cnc-brand', brand); applyBrand(); changed(); });
+$('#b-acc').addEventListener('input', e => { brand.accent = e.target.value; store.set('cnc-brand', brand); applyBrand(); draw(); });
+$('#b-logo').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader();
+  r.onload = () => { brand.logo = r.result; store.set('cnc-brand', brand); applyBrand(); }; r.readAsDataURL(f); });
+$('#b-reset').addEventListener('click', () => { for (const k in brand) delete brand[k]; store.set('cnc-brand', brand); applyBrand(); changed(); });
+
+
+/* ---------- razporejanje in predloge ---------- */
+function units() {
+  // enota = kos (skupina) ali prosto narisan zunanji rez z vsem, kar leži znotraj njega
+  const U = [], used = new Set(), bb = x => CNC.shapeBounds(x);
+  const groups = new Map();
+  doc.shapes.forEach(x => { if (x.group) { if (!groups.has(x.group)) groups.set(x.group, []); groups.get(x.group).push(x); } });
+  for (const g of groups.values()) { const o = g.find(x => x.outline) || g[0]; U.push({ shapes: g, b: bb(o) }); g.forEach(x => used.add(x.id)); }
+  const free = doc.shapes.filter(x => !used.has(x.id));
+  const outs = free.filter(x => x.op === 'outside' && CNC.isClosed(x)).map(x => ({ x, b: bb(x) })).sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0));
+  for (const o of outs) {
+    if (used.has(o.x.id)) continue;
+    const inside = free.filter(y => !used.has(y.id) && y !== o.x && (() => { const b = bb(y); return b.x0 >= o.b.x0 - 1e-6 && b.x1 <= o.b.x1 + 1e-6 && b.y0 >= o.b.y0 - 1e-6 && b.y1 <= o.b.y1 + 1e-6; })());
+    [o.x, ...inside].forEach(y => used.add(y.id)); U.push({ shapes: [o.x, ...inside], b: o.b });
+  }
+  free.filter(x => !used.has(x.id)).forEach(x => U.push({ shapes: [x], b: bb(x) }));
+  return U;
+}
+const kos = n => `${n} ${n === 1 ? 'kos' : n === 2 ? 'kosa' : n < 5 ? 'kosi' : 'kosov'}`;
+const GAP = () => doc.tool.d + 4, MARGIN = 10;
+function arrangeAll() {
+  const U = units(); if (!U.length) return;
+  const pl = TPL.pack(U.map(u => ({ w: u.b.x1 - u.b.x0, h: u.b.y1 - u.b.y0 })), [], doc.sheet, GAP(), MARGIN, false);
+  U.forEach((u, i) => u.shapes.forEach(x => moveShape(x, pl[i].x - u.b.x0, pl[i].y - u.b.y0)));
+  const out = pl.filter(p => p.out).length;
+  commit(); fit(); toast(out ? `Na ploščo ne gre: ${kos(out)} (postavljeno desno od nje).` : 'Kosi so razporejeni na ploščo.');
+}
+
+let tplKey = 'korpus', tplVals = {};
+const dlg = $('#tpl');
+function tplParams() {
+  const T = TPL.LIST[tplKey], p = {};
+  T.fields.forEach(([k, , def]) => { p[k] = tplVals[tplKey] && k in tplVals[tplKey] ? tplVals[tplKey][k] : def; });
+  return p;
+}
+function openTpl() { renderTpl(); try { dlg.showModal(); } catch { dlg.setAttribute('open', ''); } }
+function renderTpl() {
+  $('#tpl-list').innerHTML = Object.entries(TPL.LIST).map(([k, t]) => `<button type="button" data-tk="${k}" aria-pressed="${k === tplKey}"><b>${t.name}</b><span>${t.desc}</span></button>`).join('');
+  document.querySelectorAll('[data-tk]').forEach(b => b.addEventListener('click', () => { tplKey = b.dataset.tk; renderTpl(); }));
+  const T = TPL.LIST[tplKey], p = tplParams();
+  $('#tpl-form').innerHTML = `<h3>${T.name}</h3><p class="note">Debelina plošče: ${fmt(doc.sheet.t)} mm (nastavitev Material).</p><div class="grid2">${T.fields.map(([k, l, , t]) => t === 'bool'
+    ? `<label class="chk" style="grid-column:1/-1"><input type="checkbox" data-tp="${k}" ${p[k] ? 'checked' : ''}> ${l}</label>`
+    : `<label class="f"><span>${l}</span><input type="number" data-tp="${k}" step="${t === 'kos' ? 1 : 0.5}" min="0" value="${fmt(p[k])}"><em>${t === 'kos' ? 'kos' : 'mm'}</em></label>`).join('')}</div>`;
+  document.querySelectorAll('[data-tp]').forEach(i => i.addEventListener(i.type === 'checkbox' ? 'change' : 'input', () => {
+    const v = i.type === 'checkbox' ? i.checked : parseFloat(i.value); if (i.type !== 'checkbox' && !isFinite(v)) return;
+    (tplVals[tplKey] = tplVals[tplKey] || {})[i.dataset.tp] = v; tplPreview(); }));
+  tplPreview();
+}
+function tplResult() { return TPL.make(tplKey, tplParams(), doc.sheet.t, doc.tool.d); }
+function tplPreview() {
+  let res; try { res = tplResult(); } catch (e) { $('#tpl-parts').innerHTML = `<li>Napaka: ${esc(e.message)}</li>`; return; }
+  const bad = res.parts.find(p => !(p.w > 0 && p.h > 0));
+  $('#tpl-add').disabled = !!bad;
+  $('#tpl-parts').innerHTML = res.parts.map(p => `<li><b>${esc(p.name)}</b><span>${fmt(p.w)} × ${fmt(p.h)} mm${p.feats.length ? ` · ${p.feats.length} obdelav` : ''}</span></li>`).join('');
+  $('#tpl-notes').innerHTML = (bad ? ['Mere niso veljavne (kos ima širino ali višino 0 ali manj).'] : res.notes).map(n => `<li>${esc(n)}</li>`).join('');
+  // predogled: kosi v vrsti
+  const gap = 40; let x = 0; const pl = res.parts.map(p => { const o = { x, y: 0, turn: false }; x += Math.max(p.w, 1) + gap; return o; });
+  const shapes = TPL.build(res.parts, pl), W = Math.max(1, x - gap), H = Math.max(1, ...res.parts.map(p => p.h));
+  const sw = Math.max(W, H) / 220;
+  $('#tpl-svg').setAttribute('viewBox', `${-gap / 2} ${-gap / 2} ${W + gap} ${H + gap}`);
+  $('#tpl-svg').innerHTML = `<g transform="translate(0 ${H}) scale(1 -1)">${shapes.map(s => `<path d="${CNC.pathToSVGd(CNC.shapePath(s))}" fill="${s.outline ? 'var(--sheet)' : OPS[s.op].color + '30'}" stroke="${OPS[s.op].color}" stroke-width="${sw}"/>`).join('')}</g>`;
+}
+$('#tpl-add').addEventListener('click', () => {
+  const res = tplResult(), clear = $('#tpl-clear').checked, rotOk = $('#tpl-rot').checked;
+  if (clear) doc.shapes = [];
+  const occ = units().map(u => ({ x: u.b.x0, y: u.b.y0, w: u.b.x1 - u.b.x0, h: u.b.y1 - u.b.y0 }));
+  const pl = TPL.pack(res.parts, occ, doc.sheet, GAP(), MARGIN, rotOk);
+  const shapes = TPL.build(res.parts, pl).map(x => mk(x));
+  doc.shapes.push(...shapes); sel = null;
+  const out = pl.filter(p => p.out).length;
+  $('#tpl-clear').checked = false;
+  try { dlg.close(); } catch { dlg.removeAttribute('open'); }
+  commit(); fit();
+  toast(out ? `Dodano: ${kos(res.parts.length)}; ${kos(out)} ne gre na ploščo (desno od nje).` : `Dodano na ploščo: ${kos(res.parts.length)}.`);
+});
+$('#tpl-close').addEventListener('click', () => { try { dlg.close(); } catch { dlg.removeAttribute('open'); } });
+$('#tpl-open').addEventListener('click', openTpl); $('#tpl-open3').addEventListener('click', openTpl);
+
+applyBrand(); renderSettings(); setTool('select'); changed(); resize();
+}
+
+</script>
+</body>
+</html>
