@@ -15,7 +15,8 @@ Projekti se sproti shranjujejo v brskalnik; z gumbom **Shrani projekt** dobiš d
 | `cnc-risalnik.html` | Celotna aplikacija v eni datoteki – to uporabljaš. |
 | `src/core.js` | Geometrija, odmik orodja, žepi, mostički, izvoz G-koda / XXL / DXF / SVG. |
 | `src/templates.js` | Predloge (korpus, predal, plošča z luknjami, fronta, okrogla plošča) in razporejanje kosov na ploščo. |
-| `src/app.js` | Uporabniški vmesnik: risanje, izbira, nastavitve, izvoz. Na vrhu je `CONFIG` (ime podjetja, barva, logotip). |
+| `src/app.js` | Uporabniški vmesnik: risanje, izbira, nastavitve, izvoz. Na vrhu je `CONFIG` (ime podjetja, zlata barva Alfastreet, logotip). |
+| `logo.png` | (neobvezno) Logotip Alfastreet – če datoteka obstaja v isti mapi, se prikaže v glavi namesto napisa. |
 | `src/template.html` | HTML in CSS ogrodje. |
 | `src/build.py` | Združi datoteke iz `src/` v `cnc-risalnik.html`. |
 

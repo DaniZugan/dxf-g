@@ -1,9 +1,10 @@
 {
 /* ====== BLAGOVNA ZNAMKA — tu nastavite svoje podjetje ====== */
 const CONFIG = {
-  company: 'Vaše podjetje d.o.o.',
-  accent: '#e4002b',
-  logo: null, // npr. 'data:image/svg+xml;base64,...' ali null za privzeti znak
+  company: 'Alfastreet d.o.o.',
+  wordmark: 'Alfastreet',
+  accent: '#b69253',     // zlata Alfastreet
+  logo: 'logo.png',      // datoteka logotipa v isti mapi kot aplikacija (ali data: URL); če je ni, se pokaže napis
 };
 
 const $ = s => document.querySelector(s);
@@ -76,9 +77,9 @@ const toScr = p => ({ x: p.x * view.s + view.ox, y: -p.y * view.s + view.oy });
 const toW = (x, y) => ({ x: (x - view.ox) / view.s, y: -(y - view.oy) / view.s });
 function fit() {
   userView = false;
-  const m = 48, sw = doc.sheet.w, sh = doc.sheet.h;
-  view.s = Math.min((W - 2 * m) / sw, (H - 2 * m) / sh);
-  view.ox = (W - sw * view.s) / 2; view.oy = (H + sh * view.s) / 2; draw();
+  const wide = W > 700, m = 56, left = wide ? 96 : 24, top = wide ? 64 : 80, bottom = 70, sw = doc.sheet.w, sh = doc.sheet.h;
+  view.s = Math.min((W - left - m) / sw, (H - top - bottom) / sh);
+  view.ox = left + (W - left - m - sw * view.s) / 2; view.oy = top + (H - top - bottom + sh * view.s) / 2; draw();
 }
 function resize() {
   const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
@@ -112,12 +113,12 @@ function draw() {
   }
   // plošča
   const o = toScr({ x: 0, y: 0 }), sw = doc.sheet.w * view.s, sh = doc.sheet.h * view.s;
-  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.18)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+  ctx.save(); ctx.shadowColor = 'rgba(60,50,30,.14)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 6;
   ctx.fillStyle = c.sheet; ctx.fillRect(o.x, o.y - sh, sw, sh); ctx.restore();
   ctx.strokeStyle = c.edge; ctx.lineWidth = 1.5; ctx.strokeRect(o.x, o.y - sh, sw, sh);
-  ctx.font = '12px Archivo, system-ui, sans-serif'; ctx.fillStyle = c.mute; ctx.textAlign = 'center';
+  ctx.font = '600 12px Jura, system-ui, sans-serif'; ctx.fillStyle = c.mute; ctx.textAlign = 'center';
   ctx.fillText(`${fmt(doc.sheet.w)} mm`, o.x + sw / 2, o.y + 18);
-  ctx.save(); ctx.translate(o.x - 12, o.y - sh / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(`${fmt(doc.sheet.h)} mm`, 0, 0); ctx.restore();
+  ctx.save(); ctx.translate(o.x + sw + 16, o.y - sh / 2); ctx.rotate(Math.PI / 2); ctx.fillText(`${fmt(doc.sheet.h)} mm`, 0, 0); ctx.restore();
   // izhodišče
   ctx.lineWidth = 2; ctx.strokeStyle = '#e4002b'; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + 28, o.y); ctx.stroke();
   ctx.strokeStyle = '#15803d'; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x, o.y - 28); ctx.stroke();
@@ -127,7 +128,7 @@ function draw() {
     if (s.hidden) continue;
     const col = OPS[s.op].color, on = s.id === sel;
     tracePath(CNC.shapePath(s));
-    if (CNC.isClosed(s)) { ctx.fillStyle = col + (s.op === 'pocket' ? '33' : s.op === 'outside' ? '14' : '1f'); ctx.fill('evenodd'); }
+    if (CNC.isClosed(s)) { ctx.fillStyle = col + (s.op === 'pocket' ? '2b' : s.op === 'outside' ? '0c' : '17'); ctx.fill('evenodd'); }
     ctx.lineWidth = on ? 3 : 1.8; ctx.strokeStyle = col; ctx.setLineDash(s.op === 'engrave' ? [6, 4] : []); ctx.stroke(); ctx.setLineDash([]);
     if (s.op === 'drill') { const p = toScr({ x: s.cx, y: s.cy }); ctx.beginPath(); ctx.moveTo(p.x - 6, p.y); ctx.lineTo(p.x + 6, p.y); ctx.moveTo(p.x, p.y - 6); ctx.lineTo(p.x, p.y + 6); ctx.stroke(); }
   }
@@ -199,7 +200,7 @@ function drawDraft() {
   if (snapHit) { const p = toScr(snapHit); ctx.strokeStyle = CONFIG_ACCENT(); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, 7); ctx.stroke(); }
   if (!draft) return;
   ctx.strokeStyle = CONFIG_ACCENT(); ctx.lineWidth = 1.8; ctx.setLineDash([5, 4]);
-  const label = (t, p) => { ctx.setLineDash([]); ctx.font = '600 13px Archivo, system-ui, sans-serif'; const w = ctx.measureText(t).width + 12;
+  const label = (t, p) => { ctx.setLineDash([]); ctx.font = '600 13px Jura, system-ui, sans-serif'; const w = ctx.measureText(t).width + 12;
     ctx.fillStyle = css('--ink'); ctx.fillRect(p.x + 12, p.y + 10, w, 22); ctx.fillStyle = css('--bg'); ctx.textAlign = 'left'; ctx.fillText(t, p.x + 18, p.y + 25); };
   if (draft.type === 'rect') {
     const r = normRect(draft.a, draft.b), p = toScr({ x: r.x, y: r.y + r.h });
@@ -376,7 +377,7 @@ function renderPanel() {
       } else rows.push(`<li><button data-pick="${x.id}"><i style="background:${OPS[x.op].color}"></i><b>${esc(x.name)}</b><span>${OPS[x.op].label}</span></button></li>`);
     }
     el.innerHTML = `<h2>Elementi <small>${doc.shapes.length}</small></h2>
-      <div class="row" style="margin:0 0 10px"><button class="ghost" id="tpl-open2">+ Iz predloge</button><button class="ghost" id="arrange" ${doc.shapes.length ? '' : 'disabled'}>Razporedi na ploščo</button></div>
+      <div class="row" style="margin:0 0 10px"><button class="ghost" id="tpl-open2">+ Iz predloge</button><button class="ghost" id="arrange" ${doc.shapes.length ? '' : 'disabled'}>Razporedi</button></div>
       <ul class="list">${rows.join('') || '<li class="empty">Še ni elementov. Nariši kos z orodji levo ali dodaj kos iz predloge.</li>'}</ul>`;
     $('#tpl-open2').addEventListener('click', openTpl); $('#arrange').addEventListener('click', arrangeAll);
     el.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.pick; setTool('select'); renderPanel(); }));
@@ -563,8 +564,9 @@ let tt; function toast(t) { const el = $('#toast'); el.textContent = t; el.class
 function applyBrand() {
   const name = brand.company || CONFIG.company, acc = brand.accent || CONFIG.accent, logo = brand.logo || CONFIG.logo;
   document.documentElement.style.setProperty('--accent', acc);
-  $('#cname').textContent = name; doc.company = name;
-  $('#logo').innerHTML = logo ? `<img src="${esc(logo)}" alt="">` : `<span>${esc(name.trim().slice(0, 1).toUpperCase())}</span>`;
+  $('#csub').textContent = name; doc.company = name;
+  const L = $('#logo'); L.innerHTML = `<span class="word">${esc(CONFIG.wordmark || name)}</span>`;
+  if (logo) { const im = new Image(); im.alt = name; im.onload = () => { L.innerHTML = ''; L.appendChild(im); }; im.src = logo; }
   $('#b-name').value = name; $('#b-acc').value = acc;
 }
 $('#b-name').addEventListener('change', e => { brand.company = e.target.value; store.set('cnc-brand', brand); applyBrand(); changed(); });
